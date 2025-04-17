@@ -1,8 +1,6 @@
 "use client"
-
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import {
   Briefcase,
   FileText,
@@ -21,9 +19,11 @@ import {
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import Link from "next/link"
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [isPersonasOpen, setIsPersonasOpen] = useState(
     pathname.includes("/personas") ||
       pathname.includes("/clientes") ||
@@ -111,6 +111,19 @@ export function Sidebar() {
       color: "#ef4444", // Rojo
     },
   ]
+
+  // Prefetch solo las rutas principales y las que están abiertas actualmente
+  useEffect(() => {
+    // Prefetch main routes (solo las más importantes)
+    router.prefetch("/")
+    router.prefetch("/expedientes")
+
+    // Si el menú de personas está abierto, prefetch esas rutas
+    if (isPersonasOpen) {
+      router.prefetch("/personas")
+      router.prefetch("/clientes")
+    }
+  }, [router, isPersonasOpen])
 
   return (
     <TooltipProvider>
