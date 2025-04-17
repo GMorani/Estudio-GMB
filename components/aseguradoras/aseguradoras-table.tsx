@@ -2,10 +2,24 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Eye, Pencil, Trash2, Search } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import {
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  useReactTable,
+  type SortingState,
+  getSortedRowModel,
+  type ColumnFiltersState,
+  getFilteredRowModel,
+} from "@tanstack/react-table"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Eye, Pencil, Trash2, Search, ArrowUpDown } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,153 +31,202 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { formatDNI, formatTelefono } from "@/lib/utils"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { useToast } from "@/components/ui/use-toast"
 
-type Aseguradora = {
-  id: string
-  nombre: string
-  dni_cuit: string
-  telefono: string
-  email: string
-  domicilio: string
-  aseguradoras: {
-    id: string
-  }
+interface AseguradorasTableProps {
+  aseguradoras: any[]
 }
 
-export function AseguradorasTable({ aseguradoras: initialAseguradoras }: { aseguradoras: Aseguradora[] }) {
-  const [aseguradoras, setAseguradoras] = useState<Aseguradora[]>(initialAseguradoras)
-  const [searchTerm, setSearchTerm] = useState("")
+export function AseguradorasTable({ aseguradoras }: AseguradorasTableProps) {
+  const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 
-  // Filtrar aseguradoras según término de búsqueda
-  const filteredAseguradoras = aseguradoras.filter(
-    (aseguradora) =>
-      aseguradora.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      aseguradora.dni_cuit?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      aseguradora.email?.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
-
-  // Eliminar aseguradora
+  // Función para eliminar aseguradora
   async function eliminarAseguradora(id: string) {
     try {
       // Primero eliminar de la tabla aseguradoras
-      const { error: errorAseguradoras } = await supabase.from("aseguradoras").delete().eq("id", id)
+      const { error: deleteAseguradoraError } = await supabase.from("aseguradoras").delete().eq("id", id)
 
-      if (errorAseguradoras) throw errorAseguradoras
+      if (deleteAseguradoraError) throw deleteAseguradoraError
 
       // Luego eliminar de la tabla personas
-      const { error: errorPersonas } = await supabase.from("personas").delete().eq("id", id)
+      const { error: deletePersonaError } = await supabase.from("personas").delete().eq("id", id)
 
-      if (errorPersonas) throw errorPersonas
-
-      // Actualizar la lista de aseguradoras
-      setAseguradoras(aseguradoras.filter((aseguradora) => aseguradora.id !== id))
+      if (deletePersonaError) throw deletePersonaError
 
       toast({
         title: "Aseguradora eliminada",
         description: "La aseguradora ha sido eliminada correctamente",
       })
+
+      router.refresh()
     } catch (error) {
       console.error("Error al eliminar aseguradora:", error)
       toast({
         title: "Error",
-        description: "No se pudo eliminar la aseguradora. Puede tener expedientes asociados.",
+        description: "Ocurrió un error al eliminar la aseguradora. Puede tener expedientes asociados.",
         variant: "destructive",
       })
     }
   }
 
+  const columns: ColumnDef<any>[] = [
+    {
+      accessorKey: "nombre",
+      header: ({ column }) => {
+        return (
+          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Nombre
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
+      cell: ({ row }) => (
+        <div className="font-medium">
+          <Link href={`/aseguradoras/${row.original.id}`} className="hover:underline">
+            {row.getValue("nombre")}
+          </Link>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "dni_cuit",
+      header: "CUIT",
+      cell: ({ row }) => <div>{row.getValue("dni_cuit")}</div>,
+    },
+    {
+      accessorKey: "telefono",
+      header: "Teléfono",
+      cell: ({ row }) => <div>{row.getValue("telefono")}</div>,
+    },
+    {
+      accessorKey: "email",
+      header: "Email",
+      cell: ({ row }) => <div>{row.getValue("email")}</div>,
+    },
+    {
+      id: "actions",
+      header: "Acciones",
+      cell: ({ row }) => {
+        const aseguradora = row.original
+
+        return (
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" asChild>
+              <Link href={`/aseguradoras/${aseguradora.id}`}>
+                <Eye className="h-4 w-4" />
+                <span className="sr-only">Ver detalles</span>
+              </Link>
+            </Button>
+            <Button variant="ghost" size="icon" asChild>
+              <Link href={`/aseguradoras/${aseguradora.id}/editar`}>
+                <Pencil className="h-4 w-4" />
+                <span className="sr-only">Editar</span>
+              </Link>
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Eliminar</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción no se puede deshacer. Se eliminará permanentemente la aseguradora y todas sus
+                    relaciones.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => eliminarAseguradora(aseguradora.id)}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Eliminar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )
+      },
+    },
+  ]
+
+  const table = useReactTable({
+    data: aseguradoras,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      columnFilters,
+    },
+  })
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center">
-        <div className="relative flex-1">
+    <div>
+      <div className="flex items-center py-4">
+        <div className="relative max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            type="search"
-            placeholder="Buscar por nombre, CUIT o email..."
+            placeholder="Filtrar por nombre..."
+            value={(table.getColumn("nombre")?.getFilterValue() as string) ?? ""}
+            onChange={(event) => table.getColumn("nombre")?.setFilterValue(event.target.value)}
             className="pl-8"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
-
       <div className="rounded-md border">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Nombre</TableHead>
-              <TableHead>CUIT</TableHead>
-              <TableHead className="hidden md:table-cell">Teléfono</TableHead>
-              <TableHead className="hidden md:table-cell">Email</TableHead>
-              <TableHead>Acciones</TableHead>
-            </TableRow>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  )
+                })}
+              </TableRow>
+            ))}
           </TableHeader>
           <TableBody>
-            {filteredAseguradoras.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center">
-                  No se encontraron aseguradoras
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredAseguradoras.map((aseguradora) => (
-                <TableRow key={aseguradora.id}>
-                  <TableCell className="font-medium">{aseguradora.nombre}</TableCell>
-                  <TableCell>{formatDNI(aseguradora.dni_cuit)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{formatTelefono(aseguradora.telefono)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{aseguradora.email}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" asChild>
-                        <Link href={`/aseguradoras/${aseguradora.id}`}>
-                          <Eye className="h-4 w-4" />
-                          <span className="sr-only">Ver</span>
-                        </Link>
-                      </Button>
-                      <Button variant="ghost" size="icon" asChild>
-                        <Link href={`/aseguradoras/${aseguradora.id}/editar`}>
-                          <Pencil className="h-4 w-4" />
-                          <span className="sr-only">Editar</span>
-                        </Link>
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Eliminar</span>
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta acción no se puede deshacer. Se eliminará permanentemente la aseguradora y todas sus
-                              relaciones.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => eliminarAseguradora(aseguradora.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </TableCell>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                  ))}
                 </TableRow>
               ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  No se encontraron resultados.
+                </TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>
+      </div>
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+          Anterior
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+          Siguiente
+        </Button>
       </div>
     </div>
   )

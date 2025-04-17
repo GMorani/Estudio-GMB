@@ -37,6 +37,7 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
   const supabase = createClientComponentClient()
   const [dominioEmail, setDominioEmail] = useState<string>("@gmail.com")
   const [emailPersonalizado, setEmailPersonalizado] = useState<boolean>(false)
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
 
   // Valores por defecto
   const defaultValues: Partial<AseguradoraFormValues> = aseguradora
@@ -60,10 +61,10 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
     defaultValues,
   })
 
-  // Manejar cambios en el CUIT para formatear automáticamente
-  const handleCUITChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formattedCUIT = formatDNI(e.target.value)
-    form.setValue("dni_cuit", formattedCUIT)
+  // Manejar cambios en el DNI para formatear automáticamente
+  const handleDNIChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formattedDNI = formatDNI(e.target.value)
+    form.setValue("dni_cuit", formattedDNI)
   }
 
   // Manejar cambios en el teléfono para formatear automáticamente
@@ -90,24 +91,10 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
     }
   }
 
-  // Manejar cambio de dominio de email
-  const handleDominioChange = (value: string) => {
-    setDominioEmail(value)
-
-    // Actualizar el email con el nuevo dominio
-    const emailBase = form.getValues("email").split("@")[0]
-    if (emailBase) {
-      if (value === "otro") {
-        setEmailPersonalizado(true)
-        form.setValue("email", emailBase)
-      } else {
-        setEmailPersonalizado(false)
-        form.setValue("email", emailBase + value)
-      }
-    }
-  }
-
   async function onSubmit(data: AseguradoraFormValues) {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+
     try {
       // 1. Crear o actualizar en la tabla personas
       const personaData = {
@@ -142,6 +129,7 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
       // 2. Crear o actualizar en la tabla aseguradoras
       const aseguradoraData = {
         id: personaId,
+        cuit: data.dni_cuit.replace(/\./g, ""), // Eliminar puntos y usar el mismo valor que en personas
       }
 
       if (aseguradora) {
@@ -156,6 +144,13 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
           // Crear registro en aseguradoras si no existe
           const { error: insertAseguradoraError } = await supabase.from("aseguradoras").insert(aseguradoraData)
           if (insertAseguradoraError) throw insertAseguradoraError
+        } else {
+          // Actualizar el CUIT en la tabla aseguradoras
+          const { error: updateAseguradoraError } = await supabase
+            .from("aseguradoras")
+            .update({ cuit: data.dni_cuit.replace(/\./g, "") })
+            .eq("id", personaId)
+          if (updateAseguradoraError) throw updateAseguradoraError
         }
       } else {
         // Crear nueva aseguradora
@@ -170,8 +165,11 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
           : "La aseguradora ha sido creada correctamente",
       })
 
-      router.push("/aseguradoras")
-      router.refresh()
+      // Forzar la redirección después de un breve retraso
+      setTimeout(() => {
+        router.push("/aseguradoras")
+        router.refresh()
+      }, 500)
     } catch (error) {
       console.error("Error al guardar aseguradora:", error)
       toast({
@@ -179,6 +177,7 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
         description: "Ocurrió un error al guardar la aseguradora",
         variant: "destructive",
       })
+      setIsSubmitting(false)
     }
   }
 
@@ -188,13 +187,13 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Nombre */}
+              {/* Nombre completo */}
               <FormField
                 control={form.control}
                 name="nombre"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre</FormLabel>
+                    <FormLabel>Nombre completo</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -215,12 +214,12 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
                         {...field}
                         onChange={(e) => {
                           field.onChange(e)
-                          handleCUITChange(e)
+                          handleDNIChange(e)
                         }}
-                        placeholder="XX-XXXXXXXX-X"
+                        placeholder="XX-XXX-XXX"
                       />
                     </FormControl>
-                    <FormDescription>Formato: XX-XXXXXXXX-X</FormDescription>
+                    <FormDescription>Formato: XX-XXX-XXX</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -241,13 +240,13 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
                 )}
               />
 
-              {/* Teléfono */}
+              {/* Teléfono móvil */}
               <FormField
                 control={form.control}
                 name="telefono"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Teléfono</FormLabel>
+                    <FormLabel>Teléfono móvil</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -290,7 +289,9 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
               <Button type="button" variant="outline" onClick={() => router.push("/aseguradoras")}>
                 Cancelar
               </Button>
-              <Button type="submit">{aseguradora ? "Actualizar" : "Guardar"}</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Guardando..." : aseguradora ? "Actualizar" : "Guardar"}
+              </Button>
             </div>
           </form>
         </Form>
