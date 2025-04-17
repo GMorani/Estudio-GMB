@@ -93,42 +93,12 @@ export function ExpedienteForm({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [personasArray, setPersonasArray] = useState<{ id: string; rol: string }[]>([])
   const [formInitialized, setFormInitialized] = useState(false)
-
-  // Extraer personas de manera segura del expediente (solo una vez al inicio)
-  useEffect(() => {
-    try {
-      if (expediente) {
-        let personasDefault: { id: string; rol: string }[] = []
-        if (expediente.expediente_personas && Array.isArray(expediente.expediente_personas)) {
-          personasDefault = expediente.expediente_personas
-            .filter((p: any) => p && typeof p === "object" && p.persona_id)
-            .map((p: any) => ({
-              id: p.persona_id,
-              rol: p.rol || "",
-            }))
-        }
-        setPersonasArray(personasDefault)
-      }
-    } catch (error) {
-      console.error("Error al extraer personas del expediente:", error)
-      setPersonasArray([])
-    }
-  }, [expediente])
+  const [estadosArray, setEstadosArray] = useState<string[]>([])
 
   // Preparar valores por defecto de manera segura
   const getDefaultValues = () => {
     try {
       if (expediente) {
-        // Extraer estados de manera segura
-        let estadosDefault: string[] = []
-        if (expediente.expediente_estados && Array.isArray(expediente.expediente_estados)) {
-          estadosDefault = expediente.expediente_estados
-            .filter(
-              (e: any) => e && typeof e === "object" && e.estados_expediente && e.estados_expediente.id !== undefined,
-            )
-            .map((e: any) => String(e.estados_expediente.id))
-        }
-
         return {
           numero: expediente.numero || "",
           numero_judicial: expediente.numero_judicial || "",
@@ -138,8 +108,8 @@ export function ExpedienteForm({
             : undefined,
           monto_total: expediente.monto_total ? String(expediente.monto_total) : "",
           juzgado_id: expediente.juzgado_id || "",
-          estados: estadosDefault,
-          personas: [], // Inicialmente vacío, se actualizará después
+          estados: [], // Se actualizará después con useEffect
+          personas: [], // Se actualizará después con useEffect
         }
       } else {
         // Valores por defecto para un nuevo expediente
@@ -173,10 +143,63 @@ export function ExpedienteForm({
     defaultValues: getDefaultValues(),
   })
 
+  // Extraer estados de manera segura del expediente (solo una vez al inicio)
+  useEffect(() => {
+    try {
+      if (expediente && expediente.expediente_estados && Array.isArray(expediente.expediente_estados)) {
+        const estadosIds = expediente.expediente_estados
+          .filter(
+            (e: any) => e && typeof e === "object" && e.estados_expediente && e.estados_expediente.id !== undefined,
+          )
+          .map((e: any) => String(e.estados_expediente.id))
+
+        console.log("Estados extraídos:", estadosIds)
+        setEstadosArray(estadosIds)
+
+        // Actualizar el formulario con los estados extraídos
+        if (estadosIds.length > 0) {
+          form.setValue("estados", estadosIds, {
+            shouldValidate: true,
+            shouldDirty: true,
+            shouldTouch: true,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Error al extraer estados del expediente:", error)
+      setEstadosArray([])
+    }
+  }, [expediente, form])
+
+  // Extraer personas de manera segura del expediente (solo una vez al inicio)
+  useEffect(() => {
+    try {
+      if (expediente) {
+        let personasDefault: { id: string; rol: string }[] = []
+        if (expediente.expediente_personas && Array.isArray(expediente.expediente_personas)) {
+          personasDefault = expediente.expediente_personas
+            .filter((p: any) => p && typeof p === "object" && p.persona_id)
+            .map((p: any) => ({
+              id: p.persona_id,
+              rol: p.rol || "",
+            }))
+        }
+        setPersonasArray(personasDefault)
+      }
+    } catch (error) {
+      console.error("Error al extraer personas del expediente:", error)
+      setPersonasArray([])
+    }
+  }, [expediente])
+
   // Actualizar el campo personas del formulario cuando cambie personasArray
   useEffect(() => {
     if (personasArray.length > 0) {
-      form.setValue("personas", personasArray)
+      form.setValue("personas", personasArray, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      })
     }
     setFormInitialized(true)
   }, [personasArray, form])
@@ -219,7 +242,11 @@ export function ExpedienteForm({
     try {
       const updatedPersonas = personasArray.filter((_, i) => i !== index)
       setPersonasArray(updatedPersonas)
-      form.setValue("personas", updatedPersonas)
+      form.setValue("personas", updatedPersonas, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      })
     } catch (error) {
       console.error("Error al eliminar persona:", error)
     }
@@ -602,48 +629,59 @@ export function ExpedienteForm({
                 <FormField
                   control={form.control}
                   name="estados"
-                  render={() => (
+                  render={({ field }) => (
                     <FormItem>
                       <div className="mb-4">
                         <FormLabel className="text-base">Estados del expediente</FormLabel>
                         <FormDescription>Seleccione los estados actuales del expediente</FormDescription>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {estados.map((estado) => (
-                          <FormField
-                            key={estado.id}
-                            control={form.control}
-                            name="estados"
-                            render={({ field }) => {
-                              return (
-                                <FormItem
-                                  key={estado.id}
-                                  className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"
-                                  style={{
-                                    borderColor: estado.color,
-                                    backgroundColor: `${estado.color}10`,
+                        {estados.map((estado) => {
+                          // Convertir el ID a string para comparación consistente
+                          const estadoId = String(estado.id)
+                          // Verificar si este estado está en el array de estados seleccionados
+                          const isChecked = field.value?.includes(estadoId)
+
+                          return (
+                            <FormItem
+                              key={estado.id}
+                              className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"
+                              style={{
+                                borderColor: estado.color,
+                                backgroundColor: `${estado.color}10`,
+                              }}
+                            >
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value?.includes(estadoId)}
+                                  onCheckedChange={(checked) => {
+                                    // Obtener el valor actual como array
+                                    const currentValue = Array.isArray(field.value) ? [...field.value] : []
+
+                                    // Convertir todos los valores a string para comparación consistente
+                                    const stringValues = currentValue.map((v) => String(v))
+
+                                    if (checked) {
+                                      // Si no está incluido, agregarlo
+                                      if (!stringValues.includes(estadoId)) {
+                                        field.onChange([...currentValue, estadoId])
+                                      }
+                                    } else {
+                                      // Filtrar el valor
+                                      field.onChange(currentValue.filter((v) => String(v) !== estadoId))
+                                    }
+
+                                    // Forzar la actualización del formulario
+                                    setTimeout(() => {
+                                      console.log("Estados actualizados:", field.value)
+                                    }, 0)
                                   }}
-                                >
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value?.includes(String(estado.id))}
-                                      onCheckedChange={(checked) => {
-                                        const currentValue = field.value || []
-                                        const estadoId = String(estado.id)
-                                        if (checked) {
-                                          field.onChange([...currentValue, estadoId])
-                                        } else {
-                                          field.onChange(currentValue.filter((value) => value !== estadoId))
-                                        }
-                                      }}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="font-normal">{estado.nombre}</FormLabel>
-                                </FormItem>
-                              )
-                            }}
-                          />
-                        ))}
+                                />
+                              </FormControl>
+                              <FormLabel className="font-normal">{estado.nombre}</FormLabel>
+                            </FormItem>
+                          )
+                        })}
                       </div>
                       <FormMessage />
                     </FormItem>

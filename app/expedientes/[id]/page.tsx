@@ -8,18 +8,39 @@ import { formatDate, formatCurrency } from "@/lib/utils"
 import { ArrowLeft, Pencil } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
-// Marcar la página como dinámica
+// Marcar la página como dinámica para asegurar que siempre se renderice en el servidor
 export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function ExpedienteDetallePage({
   params,
 }: {
   params: { id: string }
 }) {
+  // Verificar que el ID es válido
+  if (!params.id) {
+    console.error("ID de expediente no proporcionado")
+    notFound()
+  }
+
+  console.log("Intentando cargar expediente con ID:", params.id)
+
   const supabase = createServerComponentClient({ cookies })
 
   try {
-    // Obtener datos del expediente
+    // Primero verificar si el expediente existe
+    const { data: expedienteExiste, error: errorExiste } = await supabase
+      .from("expedientes")
+      .select("id")
+      .eq("id", params.id)
+      .single()
+
+    if (errorExiste || !expedienteExiste) {
+      console.error("Expediente no encontrado:", errorExiste?.message || "No existe")
+      notFound()
+    }
+
+    // Obtener datos completos del expediente
     const { data: expediente, error: expedienteError } = await supabase
       .from("expedientes")
       .select(`
@@ -29,19 +50,30 @@ export default async function ExpedienteDetallePage({
         fecha_inicio,
         fecha_inicio_judicial,
         monto_total,
-        juzgado_id,
-        juzgados:personas(nombre)
+        juzgado_id
       `)
       .eq("id", params.id)
       .single()
 
     if (expedienteError || !expediente) {
-      console.error("Error al cargar expediente:", expedienteError)
+      console.error("Error al cargar datos del expediente:", expedienteError?.message || "No hay datos")
       notFound()
     }
 
+    // Obtener datos del juzgado si existe
+    let juzgado = null
+    if (expediente.juzgado_id) {
+      const { data: juzgadoData } = await supabase
+        .from("personas")
+        .select("nombre")
+        .eq("id", expediente.juzgado_id)
+        .single()
+
+      juzgado = juzgadoData
+    }
+
     // Obtener estados del expediente
-    const { data: estados } = await supabase
+    const { data: estadosData } = await supabase
       .from("expediente_estados")
       .select(`
         estados_expediente (
@@ -52,33 +84,40 @@ export default async function ExpedienteDetallePage({
       `)
       .eq("expediente_id", params.id)
 
+    const estados = estadosData || []
+
     // Obtener personas relacionadas con el expediente
-    const { data: personas } = await supabase
+    const { data: personasData } = await supabase
       .from("expediente_personas")
       .select(`
         rol,
         personas (
           id,
-          nombre,
-          tipo_id
+          nombre
         )
       `)
       .eq("expediente_id", params.id)
 
+    const personas = personasData || []
+
     // Obtener actividades del expediente
-    const { data: actividades } = await supabase
+    const { data: actividadesData } = await supabase
       .from("actividades_expediente")
       .select("*")
       .eq("expediente_id", params.id)
       .order("fecha", { ascending: false })
       .limit(10)
 
+    const actividades = actividadesData || []
+
     // Obtener tareas del expediente
-    const { data: tareas } = await supabase
+    const { data: tareasData } = await supabase
       .from("tareas_expediente")
       .select("*")
       .eq("expediente_id", params.id)
       .order("fecha_vencimiento", { ascending: true })
+
+    const tareas = tareasData || []
 
     return (
       <div className="space-y-6">
@@ -133,10 +172,10 @@ export default async function ExpedienteDetallePage({
                     <p>{formatCurrency(expediente.monto_total)}</p>
                   </div>
                 )}
-                {expediente.juzgados && (
+                {juzgado && (
                   <div>
                     <p className="text-sm text-muted-foreground">Juzgado</p>
-                    <p>{expediente.juzgados.nombre}</p>
+                    <p>{juzgado.nombre}</p>
                   </div>
                 )}
               </div>
@@ -149,22 +188,22 @@ export default async function ExpedienteDetallePage({
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {estados?.length === 0 ? (
+                {estados.length === 0 ? (
                   <p className="text-muted-foreground">No hay estados asignados</p>
                 ) : (
-                  estados?.map((estado, index) => (
+                  estados.map((estado, index) => (
                     <Badge
                       key={index}
                       variant="outline"
                       style={{
-                        backgroundColor: estado.estados_expediente.color
+                        backgroundColor: estado.estados_expediente?.color
                           ? `${estado.estados_expediente.color}20`
                           : undefined,
-                        color: estado.estados_expediente.color,
-                        borderColor: estado.estados_expediente.color,
+                        color: estado.estados_expediente?.color,
+                        borderColor: estado.estados_expediente?.color,
                       }}
                     >
-                      {estado.estados_expediente.nombre}
+                      {estado.estados_expediente?.nombre || "Estado sin nombre"}
                     </Badge>
                   ))
                 )}
@@ -178,14 +217,14 @@ export default async function ExpedienteDetallePage({
             <CardTitle>Personas Relacionadas</CardTitle>
           </CardHeader>
           <CardContent>
-            {personas?.length === 0 ? (
+            {personas.length === 0 ? (
               <p className="text-muted-foreground">No hay personas relacionadas</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {personas?.map((relacion, index) => (
+                {personas.map((relacion, index) => (
                   <div key={index} className="border rounded-md p-4">
-                    <p className="font-medium">{relacion.personas.nombre}</p>
-                    <p className="text-sm text-muted-foreground">{relacion.rol}</p>
+                    <p className="font-medium">{relacion.personas?.nombre || "Persona sin nombre"}</p>
+                    <p className="text-sm text-muted-foreground">{relacion.rol || "Sin rol asignado"}</p>
                   </div>
                 ))}
               </div>
@@ -199,14 +238,16 @@ export default async function ExpedienteDetallePage({
               <CardTitle>Actividades Recientes</CardTitle>
             </CardHeader>
             <CardContent>
-              {actividades?.length === 0 ? (
+              {actividades.length === 0 ? (
                 <p className="text-muted-foreground">No hay actividades registradas</p>
               ) : (
                 <div className="space-y-4">
-                  {actividades?.map((actividad, index) => (
+                  {actividades.map((actividad, index) => (
                     <div key={index} className="border-b pb-2 last:border-0">
-                      <p className="text-sm">{actividad.descripcion}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(actividad.fecha)}</p>
+                      <p className="text-sm">{actividad.descripcion || "Sin descripción"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {actividad.fecha ? formatDate(actividad.fecha) : "Fecha no disponible"}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -219,18 +260,18 @@ export default async function ExpedienteDetallePage({
               <CardTitle>Tareas Pendientes</CardTitle>
             </CardHeader>
             <CardContent>
-              {tareas?.length === 0 ? (
+              {tareas.length === 0 ? (
                 <p className="text-muted-foreground">No hay tareas pendientes</p>
               ) : (
                 <div className="space-y-4">
-                  {tareas?.map((tarea, index) => (
+                  {tareas.map((tarea, index) => (
                     <div
                       key={index}
                       className={`border rounded-md p-2 ${tarea.cumplida ? "opacity-60 line-through" : ""}`}
                     >
-                      <p className="font-medium">{tarea.descripcion}</p>
+                      <p className="font-medium">{tarea.descripcion || "Sin descripción"}</p>
                       <p className="text-xs text-muted-foreground">
-                        Vencimiento: {formatDate(tarea.fecha_vencimiento)}
+                        Vencimiento: {tarea.fecha_vencimiento ? formatDate(tarea.fecha_vencimiento) : "No especificado"}
                       </p>
                     </div>
                   ))}
@@ -241,8 +282,16 @@ export default async function ExpedienteDetallePage({
         </div>
       </div>
     )
-  } catch (error) {
-    console.error("Error en ExpedienteDetallePage:", error)
-    notFound()
+  } catch (error: any) {
+    console.error("Error general en ExpedienteDetallePage:", error.message || error)
+    return (
+      <div className="flex flex-col items-center justify-center h-[50vh] space-y-4">
+        <h1 className="text-2xl font-bold">Error al cargar el expediente</h1>
+        <p className="text-muted-foreground">No se pudo cargar la información del expediente.</p>
+        <Button asChild>
+          <Link href="/expedientes">Volver a la lista de expedientes</Link>
+        </Button>
+      </div>
+    )
   }
 }
