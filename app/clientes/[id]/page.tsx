@@ -8,6 +8,9 @@ import { ClienteExpedientes } from "@/components/clientes/cliente-expedientes"
 import { formatDNI, formatTelefono } from "@/lib/utils"
 import { ArrowLeft, Pencil } from "lucide-react"
 
+// Marcar la página como dinámica
+export const dynamic = "force-dynamic"
+
 export default async function ClienteDetallePage({
   params,
 }: {
