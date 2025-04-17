@@ -2,6 +2,9 @@ import { ClienteForm } from "@/components/clientes/cliente-form"
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 
+// Marcar la página como dinámica
+export const dynamic = "force-dynamic"
+
 export default async function NuevoClientePage() {
   const supabase = createServerComponentClient({ cookies })
 
