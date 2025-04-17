@@ -13,10 +13,11 @@ import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { formatDNI, formatTelefono } from "@/lib/utils"
 
-// Modificar el esquema de validación para que no incluya campos que podrían no existir
+// Esquema de validación
 const abogadoSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio"),
   dni_cuit: z.string().min(1, "El DNI es obligatorio"),
@@ -38,7 +39,7 @@ export function AbogadoForm({ abogado }: AbogadoFormProps) {
   const [dominioEmail, setDominioEmail] = useState<string>("@gmail.com")
   const [emailPersonalizado, setEmailPersonalizado] = useState<boolean>(false)
 
-  // Modificar los valores por defecto para que no incluyan campos que podrían no existir
+  // Valores por defecto
   const defaultValues: Partial<AbogadoFormValues> = abogado
     ? {
         nombre: abogado.nombre,
@@ -107,21 +108,6 @@ export function AbogadoForm({ abogado }: AbogadoFormProps) {
     }
   }
 
-  // Lista de especialidades comunes
-  const especialidades = [
-    "Derecho Civil",
-    "Derecho Penal",
-    "Derecho Laboral",
-    "Derecho Comercial",
-    "Derecho de Familia",
-    "Derecho Administrativo",
-    "Derecho Tributario",
-    "Derecho Ambiental",
-    "Derecho Internacional",
-    "Otra",
-  ]
-
-  // Modificar la función onSubmit para que no intente guardar campos que podrían no existir
   async function onSubmit(data: AbogadoFormValues) {
     try {
       // 1. Crear o actualizar en la tabla personas
@@ -200,7 +186,6 @@ export function AbogadoForm({ abogado }: AbogadoFormProps) {
       <CardContent className="pt-6">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Modificar el formulario para que no incluya campos que podrían no existir */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Nombre completo */}
               <FormField
@@ -285,15 +270,43 @@ export function AbogadoForm({ abogado }: AbogadoFormProps) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Correo electrónico</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        onChange={(e) => {
-                          field.onChange(e)
-                          handleEmailChange(e)
-                        }}
-                      />
-                    </FormControl>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <FormControl>
+                            <Input
+                              value={field.value.split("@")[0] || ""}
+                              onChange={(e) => {
+                                handleEmailChange(e)
+                              }}
+                              placeholder="correo"
+                            />
+                          </FormControl>
+                        </div>
+                        <Select value={dominioEmail} onValueChange={handleDominioChange}>
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Dominio" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="@gmail.com">@gmail.com</SelectItem>
+                            <SelectItem value="@hotmail.com">@hotmail.com</SelectItem>
+                            <SelectItem value="@outlook.com">@outlook.com</SelectItem>
+                            <SelectItem value="@yahoo.com.ar">@yahoo.com.ar</SelectItem>
+                            <SelectItem value="otro">Otro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {emailPersonalizado && (
+                        <FormControl>
+                          <Input
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            placeholder="correo@dominio.com"
+                            className="mt-2"
+                          />
+                        </FormControl>
+                      )}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
