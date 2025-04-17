@@ -11,40 +11,40 @@ export const dynamic = "force-dynamic"
 export default async function ExpedientesPage() {
   const supabase = createServerComponentClient({ cookies })
 
-  // Obtener todos los expedientes con sus estados
+  // Modificar la consulta para corregir la referencia a la tabla juzgados
   const { data: expedientes, error } = await supabase
     .from("expedientes")
     .select(`
-      id,
-      numero,
-      numero_judicial,
-      fecha_inicio,
-      fecha_inicio_judicial,
-      monto_total,
-      expediente_estados (
-        estados_expediente (
-          id,
-          nombre,
-          color
-        )
-      ),
-      expediente_personas (
-        rol,
-        personas (
-          id,
-          nombre
-        )
-      ),
-      juzgados (
+    id,
+    numero,
+    numero_judicial,
+    fecha_inicio,
+    fecha_inicio_judicial,
+    monto_total,
+    expediente_estados (
+      estados_expediente (
+        id,
+        nombre,
+        color
+      )
+    ),
+    expediente_personas (
+      rol,
+      personas (
         id,
         nombre
       )
-    `)
+    ),
+    juzgado_id
+  `)
     .order("fecha_creacion", { ascending: false })
 
   if (error) {
     console.error("Error al cargar expedientes:", error)
   }
+
+  // Si necesitamos información de los juzgados, podemos hacer una consulta separada
+  const { data: juzgadosData } = await supabase.from("juzgados").select("id, personas (id, nombre)")
 
   // Obtener todos los estados posibles para el filtro
   const { data: estados } = await supabase.from("estados_expediente").select("id, nombre, color").order("nombre")

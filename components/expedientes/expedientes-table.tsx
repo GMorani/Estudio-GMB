@@ -43,6 +43,7 @@ type Expediente = {
   fecha_inicio: string | null
   fecha_inicio_judicial: string | null
   monto_total: number | null
+  juzgado_id: string | null
   expediente_estados: {
     estados_expediente: Estado
   }[]
@@ -53,10 +54,6 @@ type Expediente = {
       nombre: string
     }
   }[]
-  juzgados: {
-    id: string
-    nombre: string
-  } | null
 }
 
 export function ExpedientesTable({
