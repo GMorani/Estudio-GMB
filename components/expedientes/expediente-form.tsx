@@ -24,7 +24,9 @@ import { PlusCircle, Trash2 } from "lucide-react"
 const expedienteSchema = z.object({
   numero: z.string().min(1, "El número es obligatorio"),
   numero_judicial: z.string().optional(),
-  fecha_inicio: z.date().optional(),
+  fecha_inicio: z.date({
+    required_error: "La fecha de inicio es obligatoria",
+  }),
   fecha_inicio_judicial: z.date().optional(),
   // Eliminamos descripcion del esquema ya que no existe en la base de datos
   monto_total: z.string().optional(),
@@ -78,6 +80,7 @@ export function ExpedienteForm({
   const { toast } = useToast()
   const supabase = createClientComponentClient()
   const [activeTab, setActiveTab] = useState("general")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Preparar valores por defecto
   const defaultValues: Partial<ExpedienteFormValues> = expediente
@@ -101,6 +104,7 @@ export function ExpedienteForm({
     : {
         numero: "",
         numero_judicial: "",
+        fecha_inicio: new Date(), // Fecha actual por defecto
         // Eliminamos descripcion de los valores por defecto
         monto_total: "",
         juzgado_id: "",
@@ -150,13 +154,46 @@ export function ExpedienteForm({
     ]
   }
 
+  // Verificar si el número de expediente ya existe
+  const checkNumeroExists = async (numero: string): Promise<boolean> => {
+    if (!numero) return false
+
+    // Si estamos editando un expediente existente y el número no ha cambiado, no es un duplicado
+    if (expediente && expediente.numero === numero) return false
+
+    const { data, error } = await supabase.from("expedientes").select("id").eq("numero", numero).maybeSingle()
+
+    if (error) {
+      console.error("Error al verificar número de expediente:", error)
+      return false
+    }
+
+    return !!data
+  }
+
   async function onSubmit(data: ExpedienteFormValues) {
+    if (isSubmitting) return
+
     try {
+      setIsSubmitting(true)
+
+      // Verificar si el número de expediente ya existe
+      const numeroExists = await checkNumeroExists(data.numero)
+      if (numeroExists) {
+        toast({
+          title: "Error",
+          description: `El número de expediente ${data.numero} ya existe. Por favor, utilice otro número.`,
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        return
+      }
+
       // 1. Crear o actualizar expediente
       const expedienteData = {
         numero: data.numero,
         numero_judicial: data.numero_judicial || null,
-        fecha_inicio: data.fecha_inicio?.toISOString() || null,
+        fecha_inicio: data.fecha_inicio.toISOString(), // Ya no es opcional
         fecha_inicio_judicial: data.fecha_inicio_judicial?.toISOString() || null,
         // Eliminamos el campo descripcion del objeto que se envía a la base de datos
         monto_total: data.monto_total ? Number.parseInt(data.monto_total, 10) : null,
@@ -194,11 +231,11 @@ export function ExpedienteForm({
         if (deleteEstadosError) throw deleteEstadosError
       }
 
-      // Insertar nuevos estados
+      // Insertar nuevos estados - Eliminamos el campo fecha que no existe en la tabla
       const estadosData = data.estados.map((estadoId) => ({
         expediente_id: expedienteId,
         estado_id: Number.parseInt(estadoId, 10),
-        fecha: new Date().toISOString(),
+        // Eliminamos el campo fecha que estaba causando el error
       }))
 
       if (estadosData.length > 0) {
@@ -257,6 +294,7 @@ export function ExpedienteForm({
         description: "Ocurrió un error al guardar el expediente",
         variant: "destructive",
       })
+      setIsSubmitting(false)
     }
   }
 
@@ -283,8 +321,9 @@ export function ExpedienteForm({
                       <FormItem>
                         <FormLabel>Número de expediente</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} placeholder="Ej: 0145-2023" />
                         </FormControl>
+                        <FormDescription>Ingrese un número único para identificar este expediente</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -311,8 +350,11 @@ export function ExpedienteForm({
                     name="fecha_inicio"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Fecha de inicio</FormLabel>
+                        <FormLabel>
+                          Fecha de inicio <span className="text-destructive">*</span>
+                        </FormLabel>
                         <DatePicker date={field.value} setDate={field.onChange} />
+                        <FormDescription>Este campo es obligatorio</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -532,7 +574,9 @@ export function ExpedienteForm({
               <Button type="button" variant="outline" onClick={() => router.push("/expedientes")}>
                 Cancelar
               </Button>
-              <Button type="submit">{expediente ? "Actualizar" : "Guardar"}</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Guardando..." : expediente ? "Actualizar" : "Guardar"}
+              </Button>
             </div>
           </form>
         </Form>
