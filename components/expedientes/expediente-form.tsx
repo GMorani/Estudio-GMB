@@ -202,7 +202,13 @@ export function ExpedienteForm({
       const newPersona = { id: "", rol: "" }
       const updatedPersonas = [...personasArray, newPersona]
       setPersonasArray(updatedPersonas)
-      form.setValue("personas", updatedPersonas)
+
+      // Actualizar explícitamente el campo personas en el formulario
+      form.setValue("personas", updatedPersonas, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      })
     } catch (error) {
       console.error("Error al agregar persona:", error)
     }
@@ -229,7 +235,13 @@ export function ExpedienteForm({
           [field]: value,
         }
         setPersonasArray(updatedPersonas)
-        form.setValue("personas", updatedPersonas)
+
+        // Actualizar explícitamente el campo personas en el formulario
+        form.setValue("personas", updatedPersonas, {
+          shouldValidate: true,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
       }
     } catch (error) {
       console.error(`Error al actualizar ${field} de persona:`, error)
@@ -397,9 +409,9 @@ export function ExpedienteForm({
         if (deletePersonasError) throw deletePersonasError
       }
 
-      // Insertar nuevas personas
+      // Filtrar y validar personas antes de insertar
       const personasData = data.personas
-        .filter((p) => p.id && p.rol) // Filtrar entradas vacías
+        .filter((p) => p && p.id && p.id.trim() !== "" && p.rol && p.rol.trim() !== "") // Filtrar entradas vacías o inválidas
         .map((persona) => ({
           expediente_id: expedienteId,
           persona_id: persona.id,
