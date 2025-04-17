@@ -7,8 +7,9 @@ import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { formatDate } from "@/lib/utils"
+import { formatDate, formatCurrency } from "@/lib/utils"
 import { ExpedientesFilter } from "@/components/expedientes/expedientes-filter"
+import { useToast } from "@/components/ui/use-toast"
 
 type Expediente = {
   id: string
@@ -29,8 +30,10 @@ export function ExpedientesTableSimple({
 }) {
   const [expedientes, setExpedientes] = useState<Expediente[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createClientComponentClient()
+  const { toast } = useToast()
 
   // Obtener parámetros de búsqueda
   const numero = searchParams?.numero as string
@@ -43,8 +46,18 @@ export function ExpedientesTableSimple({
   useEffect(() => {
     async function fetchExpedientes() {
       setLoading(true)
+      setError(null)
 
       try {
+        console.log("Cargando expedientes con filtros:", {
+          numero,
+          personaId,
+          estadoId,
+          tipo,
+          ordenarPor,
+          ordenAscendente,
+        })
+
         // Construir la consulta base
         let query = supabase.from("expedientes").select(`
           id,
@@ -92,49 +105,61 @@ export function ExpedientesTableSimple({
         const ascending = ordenAscendente !== undefined ? ordenAscendente : false
         query = query.order(sortBy, { ascending })
 
-        const { data, error } = await query
+        // Limitar resultados para evitar problemas de rendimiento
+        query = query.limit(100)
 
-        if (error) throw error
+        const { data, error: queryError } = await query
+
+        if (queryError) throw queryError
+
+        console.log("Expedientes cargados:", data?.length || 0)
 
         // Transformar los datos para facilitar su uso
-        const formattedData = data.map((exp) => {
-          // Obtener el nombre de la primera persona asociada (generalmente el cliente principal)
-          const personaNombre = exp.expediente_personas?.[0]?.personas?.nombre || "Sin persona"
+        const formattedData =
+          data?.map((exp) => {
+            // Obtener el nombre de la primera persona asociada (generalmente el cliente principal)
+            const personaNombre = exp.expediente_personas?.[0]?.personas?.nombre || "Sin persona"
 
-          return {
-            id: exp.id,
-            numero: exp.numero,
-            fecha_inicio: exp.fecha_inicio,
-            monto_total: exp.monto_total,
-            persona_nombre: personaNombre,
-            estados: exp.expediente_estados.map((estado: any) => ({
-              nombre: estado.estados_expediente.nombre,
-              color: estado.estados_expediente.color,
-            })),
-          }
-        })
+            return {
+              id: exp.id,
+              numero: exp.numero,
+              fecha_inicio: exp.fecha_inicio,
+              monto_total: exp.monto_total,
+              persona_nombre: personaNombre,
+              estados: exp.expediente_estados.map((estado: any) => ({
+                nombre: estado.estados_expediente.nombre,
+                color: estado.estados_expediente.color,
+              })),
+            }
+          }) || []
 
         setExpedientes(formattedData)
-      } catch (error) {
-        console.error("Error al cargar expedientes:", error)
+      } catch (err: any) {
+        console.error("Error al cargar expedientes:", err)
+        setError(err.message || "Error al cargar expedientes")
+
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los expedientes. Por favor, intenta nuevamente.",
+          variant: "destructive",
+        })
       } finally {
         setLoading(false)
       }
     }
 
     fetchExpedientes()
-  }, [supabase, numero, personaId, estadoId, tipo, ordenarPor, ordenAscendente])
-
-  // Construir la URL con los parámetros de búsqueda
-  const createQueryString = (name: string, value: string) => {
-    const params = new URLSearchParams(searchParams)
-    params.set(name, value)
-    return params.toString()
-  }
+  }, [supabase, numero, personaId, estadoId, tipo, ordenarPor, ordenAscendente, toast])
 
   return (
     <div className="space-y-4">
       <ExpedientesFilter />
+
+      {error && (
+        <div className="rounded-md bg-destructive/10 p-4 text-destructive">
+          <p>{error}</p>
+        </div>
+      )}
 
       <div className="rounded-md border">
         <Table>
@@ -153,19 +178,19 @@ export function ExpedientesTableSimple({
               [...Array(5)].map((_, i) => (
                 <TableRow key={i}>
                   <TableCell>
-                    <Skeleton />
+                    <Skeleton className="h-5 w-20" />
                   </TableCell>
                   <TableCell>
-                    <Skeleton />
+                    <Skeleton className="h-5 w-24" />
                   </TableCell>
                   <TableCell>
-                    <Skeleton />
+                    <Skeleton className="h-5 w-32" />
                   </TableCell>
                   <TableCell>
-                    <Skeleton />
+                    <Skeleton className="h-5 w-24" />
                   </TableCell>
                   <TableCell>
-                    <Skeleton />
+                    <Skeleton className="h-5 w-16" />
                   </TableCell>
                 </TableRow>
               ))
@@ -202,12 +227,12 @@ export function ExpedientesTableSimple({
                           {estado.nombre}
                         </Badge>
                       ))}
-                      {expediente.estados?.length > 2 && (
+                      {(expediente.estados?.length || 0) > 2 && (
                         <Badge variant="outline">+ {expediente.estados.length - 2}</Badge>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">{expediente.monto_total}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(expediente.monto_total)}</TableCell>
                 </TableRow>
               ))
             )}

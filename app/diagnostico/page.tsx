@@ -1,5 +1,7 @@
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 // Marcar la página como dinámica
 export const dynamic = "force-dynamic"
@@ -26,6 +28,11 @@ export default async function DiagnosticoPage() {
   // Consultar los tipos de persona
   const { data: tiposPersona, error: tiposError } = await supabase.from("tipos_persona").select("*")
 
+  // Contar expedientes
+  const { count: expedientesCount, error: expedientesError } = await supabase
+    .from("expedientes")
+    .select("*", { count: "exact", head: true })
+
   return (
     <div className="space-y-8">
       <div>
@@ -33,6 +40,12 @@ export default async function DiagnosticoPage() {
         <p className="text-muted-foreground">
           Esta página muestra información directa de la base de datos para ayudar a diagnosticar problemas.
         </p>
+      </div>
+
+      <div className="flex flex-wrap gap-4">
+        <Button asChild variant="outline">
+          <Link href="/diagnostico/expedientes">Ver Diagnóstico de Expedientes ({expedientesCount || 0})</Link>
+        </Button>
       </div>
 
       <div className="space-y-4">
