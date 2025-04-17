@@ -469,7 +469,13 @@ export function ExpedienteForm({
     <Card>
       <CardContent className="pt-6">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              form.handleSubmit(onSubmit)(e)
+            }}
+            className="space-y-6"
+          >
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="general">Información General</TabsTrigger>
