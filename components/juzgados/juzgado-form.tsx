@@ -19,6 +19,8 @@ import { formatTelefono } from "@/lib/utils"
 // Esquema de validación
 const juzgadoSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio"),
+  nombre_juez: z.string().optional(),
+  nombre_secretario: z.string().optional(),
   domicilio: z.string().min(1, "La dirección es obligatoria"),
   telefono: z.string().min(1, "El teléfono es obligatorio"),
   email: z.string().email("Email inválido").min(1, "El email es obligatorio"),
@@ -41,12 +43,16 @@ export function JuzgadoForm({ juzgado }: JuzgadoFormProps) {
   const defaultValues: Partial<JuzgadoFormValues> = juzgado
     ? {
         nombre: juzgado.nombre,
+        nombre_juez: juzgado.juzgados?.nombre_juez || "",
+        nombre_secretario: juzgado.juzgados?.nombre_secretario || "",
         domicilio: juzgado.domicilio,
         telefono: juzgado.telefono,
         email: juzgado.email,
       }
     : {
         nombre: "",
+        nombre_juez: "",
+        nombre_secretario: "",
         domicilio: "",
         telefono: "",
         email: "",
@@ -80,6 +86,8 @@ export function JuzgadoForm({ juzgado }: JuzgadoFormProps) {
       form.setValue("email", emailValue)
     }
   }
+
+  // Modificar la función onSubmit para asegurar que la redirección funcione correctamente
 
   async function onSubmit(data: JuzgadoFormValues) {
     try {
@@ -116,6 +124,8 @@ export function JuzgadoForm({ juzgado }: JuzgadoFormProps) {
       // 2. Crear o actualizar en la tabla juzgados
       const juzgadoData = {
         id: personaId,
+        nombre_juez: data.nombre_juez || null,
+        nombre_secretario: data.nombre_secretario || null,
       }
 
       if (juzgado) {
@@ -126,6 +136,16 @@ export function JuzgadoForm({ juzgado }: JuzgadoFormProps) {
           // Crear registro en juzgados si no existe
           const { error: insertJuzgadoError } = await supabase.from("juzgados").insert(juzgadoData)
           if (insertJuzgadoError) throw insertJuzgadoError
+        } else {
+          // Actualizar registro existente
+          const { error: updateJuzgadoError } = await supabase
+            .from("juzgados")
+            .update({
+              nombre_juez: data.nombre_juez || null,
+              nombre_secretario: data.nombre_secretario || null,
+            })
+            .eq("id", personaId)
+          if (updateJuzgadoError) throw updateJuzgadoError
         }
       } else {
         // Crear nuevo juzgado
@@ -140,8 +160,12 @@ export function JuzgadoForm({ juzgado }: JuzgadoFormProps) {
           : "El juzgado ha sido creado correctamente",
       })
 
+      // Redirección después de guardar
       router.push("/juzgados")
-      router.refresh()
+      // Asegurarse de que la navegación se complete antes de refrescar
+      setTimeout(() => {
+        router.refresh()
+      }, 100)
     } catch (error) {
       console.error("Error al guardar juzgado:", error)
       toast({
@@ -167,6 +191,36 @@ export function JuzgadoForm({ juzgado }: JuzgadoFormProps) {
                     <FormLabel>Nombre del Juzgado</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="Ej: Juzgado Civil N° 5" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Nombre del Juez */}
+              <FormField
+                control={form.control}
+                name="nombre_juez"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre del Juez</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Ej: Dr. Juan Pérez" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Nombre del Secretario */}
+              <FormField
+                control={form.control}
+                name="nombre_secretario"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre del Secretario</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Ej: Dr. María González" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
