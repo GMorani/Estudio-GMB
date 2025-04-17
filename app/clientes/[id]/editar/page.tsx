@@ -3,6 +3,9 @@ import { cookies } from "next/headers"
 import { notFound } from "next/navigation"
 import { ClienteForm } from "@/components/clientes/cliente-form"
 
+// Marcar la página como dinámica
+export const dynamic = "force-dynamic"
+
 export default async function EditarClientePage({
   params,
 }: {
