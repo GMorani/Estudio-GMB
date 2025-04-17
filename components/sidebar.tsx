@@ -22,7 +22,12 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import Link from "next/link"
 
-export function Sidebar() {
+interface SidebarProps {
+  isCollapsed?: boolean
+}
+
+// Cambiamos la exportación para que coincida con la forma en que se importa
+export const Sidebar = ({ isCollapsed = false }: SidebarProps) => {
   const pathname = usePathname()
   const router = useRouter()
   const [isPersonasOpen, setIsPersonasOpen] = useState(
@@ -137,31 +142,45 @@ export function Sidebar() {
         </div>
         <div className="flex-1 overflow-auto py-2">
           <nav className="grid items-start px-2 md:px-4 gap-1">
-            {/* Rutas principales */}
-            {mainRoutes.map((route) => {
-              const Icon = route.icon
-              return (
-                <Tooltip key={route.href} delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href={route.href}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
-                        pathname === route.href ? "bg-accent text-accent-foreground" : "transparent",
-                      )}
-                    >
-                      <Icon className="h-5 w-5" style={{ color: route.color }} />
-                      <span className="hidden md:inline-flex">{route.title}</span>
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="md:hidden">
-                    {route.title}
-                  </TooltipContent>
-                </Tooltip>
-              )
-            })}
+            {/* Inicio */}
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                    pathname === "/" ? "bg-accent text-accent-foreground" : "transparent",
+                  )}
+                >
+                  <Home className="h-5 w-5" style={{ color: "#3b82f6" }} />
+                  <span className="hidden md:inline-flex">Inicio</span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="md:hidden">
+                Inicio
+              </TooltipContent>
+            </Tooltip>
 
-            {/* Menú desplegable de Personas */}
+            {/* Expedientes */}
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/expedientes"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                    pathname === "/expedientes" ? "bg-accent text-accent-foreground" : "transparent",
+                  )}
+                >
+                  <FileText className="h-5 w-5" style={{ color: "#8b5cf6" }} />
+                  <span className="hidden md:inline-flex">Expedientes</span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="md:hidden">
+                Expedientes
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Menú desplegable de Personas (ahora entre Expedientes y Calendario) */}
             <Collapsible open={isPersonasOpen} onOpenChange={setIsPersonasOpen} className="w-full">
               <Tooltip delayDuration={0}>
                 <TooltipTrigger asChild>
@@ -214,6 +233,63 @@ export function Sidebar() {
                 })}
               </CollapsibleContent>
             </Collapsible>
+
+            {/* Calendario */}
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/calendario"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                    pathname === "/calendario" ? "bg-accent text-accent-foreground" : "transparent",
+                  )}
+                >
+                  <Calendar className="h-5 w-5" style={{ color: "#f97316" }} />
+                  <span className="hidden md:inline-flex">Calendario</span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="md:hidden">
+                Calendario
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Reportes */}
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/reportes"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                    pathname === "/reportes" ? "bg-accent text-accent-foreground" : "transparent",
+                  )}
+                >
+                  <BarChart3 className="h-5 w-5" style={{ color: "#10b981" }} />
+                  <span className="hidden md:inline-flex">Reportes</span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="md:hidden">
+                Reportes
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Configuración */}
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/configuracion"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                    pathname === "/configuracion" ? "bg-accent text-accent-foreground" : "transparent",
+                  )}
+                >
+                  <Settings className="h-5 w-5" style={{ color: "#6b7280" }} />
+                  <span className="hidden md:inline-flex">Configuración</span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="md:hidden">
+                Configuración
+              </TooltipContent>
+            </Tooltip>
           </nav>
         </div>
       </div>

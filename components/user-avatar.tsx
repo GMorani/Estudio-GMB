@@ -17,9 +17,12 @@ export function UserAvatar({ name, email, image }: UserAvatarProps) {
     .substring(0, 2)
 
   return (
-    <Avatar>
-      <AvatarImage src={image || "/placeholder.svg"} alt={name} />
-      <AvatarFallback>{initials || <User className="h-4 w-4" />}</AvatarFallback>
+    <Avatar className="h-8 w-8">
+      {image ? (
+        <AvatarImage src={image || "/placeholder.svg"} alt={name} />
+      ) : (
+        <AvatarFallback>{initials || <User className="h-4 w-4" />}</AvatarFallback>
+      )}
     </Avatar>
   )
 }

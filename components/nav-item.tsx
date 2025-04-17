@@ -7,13 +7,13 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 
 interface NavItemProps {
-  title: string
   href: string
+  title: string
   icon: React.ReactNode
   isCollapsed: boolean
 }
 
-export function NavItem({ title, href, icon, isCollapsed }: NavItemProps) {
+export function NavItem({ href, title, icon, isCollapsed }: NavItemProps) {
   const pathname = usePathname()
   const isActive = pathname === href
 
@@ -21,10 +21,9 @@ export function NavItem({ title, href, icon, isCollapsed }: NavItemProps) {
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-        isActive
-          ? "bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+        "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all hover:bg-accent hover:text-accent-foreground",
+        isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground",
+        isCollapsed ? "justify-center" : "",
       )}
     >
       {icon}
