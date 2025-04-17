@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -96,10 +96,14 @@ export function ExpedienteForm({
         juzgado_id: expediente.juzgado_id || "",
         estados: expediente.expediente_estados?.map((e: any) => String(e.estados_expediente.id)) || [],
         personas:
-          expediente.expediente_personas?.map((p: any) => ({
-            id: p.persona_id,
-            rol: p.rol,
-          })) || [],
+          expediente && expediente.expediente_personas
+            ? expediente.expediente_personas
+                .filter((p: any) => p && p.persona_id) // Filtrar entradas inválidas
+                .map((p: any) => ({
+                  id: p.persona_id,
+                  rol: p.rol || "",
+                }))
+            : [],
       }
     : {
         numero: "",
@@ -117,6 +121,19 @@ export function ExpedienteForm({
     defaultValues,
   })
 
+  // Efecto para actualizar los campos cuando se cambia de pestaña
+  useEffect(() => {
+    if (activeTab === "personas") {
+      // Forzar una actualización de los campos de personas cuando se cambia a la pestaña de personas
+      setTimeout(() => {
+        const personas = form.getValues("personas") || []
+        if (personas.length > 0) {
+          form.trigger("personas")
+        }
+      }, 100)
+    }
+  }, [activeTab, form])
+
   // Manejar cambios en el monto para formatear automáticamente
   const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/[^\d]/g, "")
@@ -132,6 +149,11 @@ export function ExpedienteForm({
   const addPersona = () => {
     const personas = form.getValues("personas") || []
     form.setValue("personas", [...personas, { id: "", rol: "" }])
+
+    // Forzar una actualización del formulario para que los nuevos campos se rendericen correctamente
+    setTimeout(() => {
+      form.trigger("personas")
+    }, 100)
   }
 
   // Eliminar persona del expediente
@@ -145,12 +167,13 @@ export function ExpedienteForm({
 
   // Obtener todas las personas disponibles
   const getAllPersonas = () => {
+    // Filtrar elementos undefined o nulos antes de mapearlos
     return [
-      ...clientes.map((c) => ({ ...c, tipo: "Cliente" })),
-      ...abogados.map((a) => ({ ...a, tipo: "Abogado" })),
-      ...aseguradoras.map((a) => ({ ...a, tipo: "Aseguradora" })),
-      ...mediadores.map((m) => ({ ...m, tipo: "Mediador" })),
-      ...peritos.map((p) => ({ ...p, tipo: "Perito" })),
+      ...clientes.filter(Boolean).map((c) => ({ ...c, tipo: "Cliente" })),
+      ...abogados.filter(Boolean).map((a) => ({ ...a, tipo: "Abogado" })),
+      ...aseguradoras.filter(Boolean).map((a) => ({ ...a, tipo: "Aseguradora" })),
+      ...mediadores.filter(Boolean).map((m) => ({ ...m, tipo: "Mediador" })),
+      ...peritos.filter(Boolean).map((p) => ({ ...p, tipo: "Perito" })),
     ]
   }
 
@@ -524,12 +547,13 @@ export function ExpedienteForm({
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="none">Seleccionar persona</SelectItem>
-                                {getAllPersonas().map((persona) => (
-                                  <SelectItem key={persona.id} value={persona.id}>
-                                    {persona.nombre} ({persona.tipo})
-                                  </SelectItem>
-                                ))}
+                                {getAllPersonas()
+                                  .filter((persona) => persona && persona.id && persona.nombre) // Asegurar que persona tenga id y nombre
+                                  .map((persona) => (
+                                    <SelectItem key={persona.id} value={persona.id}>
+                                      {persona.nombre} ({persona.tipo})
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                             <FormMessage />
@@ -550,7 +574,6 @@ export function ExpedienteForm({
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="none">Seleccionar rol</SelectItem>
                                 <SelectItem value="Actora">Actora</SelectItem>
                                 <SelectItem value="Demandada">Demandada</SelectItem>
                                 <SelectItem value="Tercero">Tercero</SelectItem>
