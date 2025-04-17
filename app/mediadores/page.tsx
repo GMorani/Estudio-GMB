@@ -1,37 +1,8 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
-import { MediadoresTable } from "@/components/mediadores/mediadores-table"
-import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
 import { PlusCircle } from "lucide-react"
 
-// Marcar la página como dinámica
-export const dynamic = "force-dynamic"
-
-export default async function MediadoresPage() {
-  const supabase = createServerComponentClient({ cookies })
-
-  // Obtener todos los mediadores
-  const { data: mediadores, error } = await supabase
-    .from("personas")
-    .select(`
-      id,
-      nombre,
-      dni_cuit,
-      telefono,
-      email,
-      domicilio,
-      mediadores (
-        id
-      )
-    `)
-    .eq("tipo_id", 5) // Asumiendo que tipo_id 5 es para mediadores
-    .order("nombre")
-
-  if (error) {
-    console.error("Error al cargar mediadores:", error)
-  }
-
+export default function MediadoresPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -44,7 +15,16 @@ export default async function MediadoresPage() {
         </Button>
       </div>
 
-      <MediadoresTable mediadores={mediadores || []} />
+      <div className="rounded-md border p-8 text-center">
+        <h2 className="text-xl font-semibold mb-2">No hay mediadores para mostrar</h2>
+        <p className="text-muted-foreground mb-4">Comienza agregando un nuevo mediador a tu sistema.</p>
+        <Button asChild>
+          <Link href="/mediadores/nuevo">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Agregar Mediador
+          </Link>
+        </Button>
+      </div>
     </div>
   )
 }

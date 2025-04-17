@@ -1,37 +1,8 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
-import { AseguradorasTable } from "@/components/aseguradoras/aseguradoras-table"
-import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
 import { PlusCircle } from "lucide-react"
 
-// Marcar la página como dinámica
-export const dynamic = "force-dynamic"
-
-export default async function AseguradorasPage() {
-  const supabase = createServerComponentClient({ cookies })
-
-  // Obtener todas las aseguradoras
-  const { data: aseguradoras, error } = await supabase
-    .from("personas")
-    .select(`
-      id,
-      nombre,
-      dni_cuit,
-      telefono,
-      email,
-      domicilio,
-      aseguradoras (
-        id
-      )
-    `)
-    .eq("tipo_id", 3) // Asumiendo que tipo_id 3 es para aseguradoras
-    .order("nombre")
-
-  if (error) {
-    console.error("Error al cargar aseguradoras:", error)
-  }
-
+export default function AseguradorasPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -44,7 +15,16 @@ export default async function AseguradorasPage() {
         </Button>
       </div>
 
-      <AseguradorasTable aseguradoras={aseguradoras || []} />
+      <div className="rounded-md border p-8 text-center">
+        <h2 className="text-xl font-semibold mb-2">No hay aseguradoras para mostrar</h2>
+        <p className="text-muted-foreground mb-4">Comienza agregando una nueva aseguradora a tu sistema.</p>
+        <Button asChild>
+          <Link href="/aseguradoras/nuevo">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Agregar Aseguradora
+          </Link>
+        </Button>
+      </div>
     </div>
   )
 }
