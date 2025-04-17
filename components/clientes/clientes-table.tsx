@@ -34,6 +34,7 @@ type Cliente = {
 }
 
 export function ClientesTable({ clientes: initialClientes }: { clientes: Cliente[] }) {
+  console.log("Clientes recibidos:", initialClientes)
   const [clientes, setClientes] = useState<Cliente[]>(initialClientes)
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
@@ -42,7 +43,7 @@ export function ClientesTable({ clientes: initialClientes }: { clientes: Cliente
   // Filtrar clientes según término de búsqueda
   const filteredClientes = clientes.filter(
     (cliente) =>
-      cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cliente.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cliente.dni_cuit?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cliente.email?.toLowerCase().includes(searchTerm.toLowerCase()),
   )

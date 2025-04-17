@@ -138,6 +138,8 @@ export function ClienteForm({ cliente, clientesReferidos }: ClienteFormProps) {
 
   async function onSubmit(data: ClienteFormValues) {
     try {
+      console.log("Guardando cliente con datos:", data)
+
       // 1. Crear o actualizar en la tabla personas
       const personaData = {
         nombre: data.nombre,
@@ -147,6 +149,8 @@ export function ClienteForm({ cliente, clientesReferidos }: ClienteFormProps) {
         email: data.email,
         tipo_id: 1, // Tipo cliente
       }
+
+      console.log("Datos de persona a guardar:", personaData)
 
       let personaId
 
