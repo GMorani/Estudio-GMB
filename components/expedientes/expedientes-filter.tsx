@@ -1,46 +1,73 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ChevronDown, Search } from "lucide-react"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
-type Estado = {
-  id: number
-  nombre: string
-  color: string
-}
-
-type Persona = {
-  id: string
-  nombre: string
-}
-
-interface ExpedientesFilterProps {
-  estados: Estado[]
-  personas: Persona[]
-}
-
-export function ExpedientesFilter({ estados, personas }: ExpedientesFilterProps) {
+export function ExpedientesFilter() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const supabase = createClientComponentClient()
 
-  // Inicializar estados con valores de URL
+  // Estados para los filtros
   const [numero, setNumero] = useState(searchParams.get("numero") || "")
   const [personaId, setPersonaId] = useState(searchParams.get("persona_id") || "")
   const [estadoId, setEstadoId] = useState(searchParams.get("estado_id") || "")
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Manejar búsqueda
-  function handleSearch() {
-    if (isSubmitting) return
+  // Estados para los datos de los filtros
+  const [estados, setEstados] = useState<any[]>([])
+  const [personas, setPersonas] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(false)
 
-    setIsSubmitting(true)
+  // Cargar datos para los filtros
+  useEffect(() => {
+    async function loadFilterData() {
+      try {
+        // Obtener estados
+        const { data: estadosData } = await supabase
+          .from("estados_expediente")
+          .select("id, nombre, color")
+          .order("nombre")
+
+        if (estadosData) {
+          setEstados(estadosData)
+        }
+
+        // Obtener personas (clientes)
+        const { data: personasData } = await supabase
+          .from("personas")
+          .select("id, nombre")
+          .eq("tipo_id", 1) // Tipo cliente
+          .order("nombre")
+
+        if (personasData) {
+          setPersonas(personasData)
+        }
+      } catch (err) {
+        console.error("Error al cargar datos para filtros:", err)
+      }
+    }
+
+    loadFilterData()
+  }, [supabase])
+
+  // Manejar envío del formulario
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (isLoading) return
+    setIsLoading(true)
 
     const params = new URLSearchParams()
+
     if (numero) params.set("numero", numero)
     if (personaId && personaId !== "all") params.set("persona_id", personaId)
     if (estadoId && estadoId !== "all") params.set("estado_id", estadoId)
@@ -49,35 +76,41 @@ export function ExpedientesFilter({ estados, personas }: ExpedientesFilterProps)
 
     // Prevenir múltiples envíos
     setTimeout(() => {
-      setIsSubmitting(false)
+      setIsLoading(false)
     }, 500)
+  }
+
+  // Limpiar filtros
+  const handleReset = () => {
+    setNumero("")
+    setPersonaId("")
+    setEstadoId("")
+    router.push("/expedientes")
   }
 
   return (
     <Card>
-      <CardContent className="pt-6">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <ChevronDown className="h-5 w-5" />
-            <h2 className="text-lg font-semibold">Filtros de Búsqueda</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">Buscar expedientes por diferentes criterios</p>
-
+      <CardHeader>
+        <CardTitle>Filtrar Expedientes</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <label htmlFor="numero" className="text-sm font-medium">
-                Número de Carpeta
-              </label>
-              <Input id="numero" placeholder="Ej: 0145" value={numero} onChange={(e) => setNumero(e.target.value)} />
+              <Label htmlFor="numero">Número de Expediente</Label>
+              <Input
+                id="numero"
+                placeholder="Buscar por número..."
+                value={numero}
+                onChange={(e) => setNumero(e.target.value)}
+              />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="persona" className="text-sm font-medium">
-                Persona
-              </label>
+              <Label htmlFor="persona">Persona</Label>
               <Select value={personaId} onValueChange={setPersonaId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Nombre de la persona" />
+                <SelectTrigger id="persona">
+                  <SelectValue placeholder="Seleccionar persona" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas las personas</SelectItem>
@@ -91,11 +124,9 @@ export function ExpedientesFilter({ estados, personas }: ExpedientesFilterProps)
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="estado" className="text-sm font-medium">
-                Estado
-              </label>
+              <Label htmlFor="estado">Estado</Label>
               <Select value={estadoId} onValueChange={setEstadoId}>
-                <SelectTrigger>
+                <SelectTrigger id="estado">
                   <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
                 <SelectContent>
@@ -110,13 +141,17 @@ export function ExpedientesFilter({ estados, personas }: ExpedientesFilterProps)
             </div>
           </div>
 
-          <div className="flex justify-end">
-            <Button onClick={handleSearch} disabled={isSubmitting}>
+          <div className="flex justify-end space-x-2">
+            <Button type="button" variant="outline" onClick={handleReset}>
+              <X className="mr-2 h-4 w-4" />
+              Limpiar
+            </Button>
+            <Button type="submit" disabled={isLoading}>
               <Search className="mr-2 h-4 w-4" />
-              {isSubmitting ? "Buscando..." : "Buscar"}
+              {isLoading ? "Buscando..." : "Buscar"}
             </Button>
           </div>
-        </div>
+        </form>
       </CardContent>
     </Card>
   )
