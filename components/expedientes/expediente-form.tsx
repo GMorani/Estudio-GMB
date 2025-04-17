@@ -28,7 +28,6 @@ const expedienteSchema = z.object({
     required_error: "La fecha de inicio es obligatoria",
   }),
   fecha_inicio_judicial: z.date().optional(),
-  // Eliminamos descripcion del esquema ya que no existe en la base de datos
   monto_total: z.string().optional(),
   juzgado_id: z.string().optional(),
   estados: z.array(z.string()).min(1, "Debe seleccionar al menos un estado"),
@@ -66,132 +65,254 @@ type ExpedienteFormProps = {
   peritos: Persona[]
 }
 
+// Roles disponibles para las personas
+const ROLES_DISPONIBLES = [
+  { value: "Actora", label: "Actora" },
+  { value: "Demandada", label: "Demandada" },
+  { value: "Tercero", label: "Tercero" },
+  { value: "Abogado Actora", label: "Abogado Actora" },
+  { value: "Abogado Demandada", label: "Abogado Demandada" },
+  { value: "Mediador", label: "Mediador" },
+  { value: "Perito", label: "Perito" },
+]
+
 export function ExpedienteForm({
   expediente,
-  juzgados,
-  estados,
-  clientes,
-  abogados,
-  aseguradoras,
-  mediadores,
-  peritos,
+  juzgados = [],
+  estados = [],
+  clientes = [],
+  abogados = [],
+  aseguradoras = [],
+  mediadores = [],
+  peritos = [],
 }: ExpedienteFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
   const [activeTab, setActiveTab] = useState("general")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [personasArray, setPersonasArray] = useState<{ id: string; rol: string }[]>([])
+  const [formInitialized, setFormInitialized] = useState(false)
 
-  // Preparar valores por defecto
-  const defaultValues: Partial<ExpedienteFormValues> = expediente
-    ? {
-        numero: expediente.numero,
-        numero_judicial: expediente.numero_judicial || "",
-        fecha_inicio: expediente.fecha_inicio ? new Date(expediente.fecha_inicio) : undefined,
-        fecha_inicio_judicial: expediente.fecha_inicio_judicial
-          ? new Date(expediente.fecha_inicio_judicial)
-          : undefined,
-        // Eliminamos descripcion de los valores por defecto
-        monto_total: expediente.monto_total ? String(expediente.monto_total) : "",
-        juzgado_id: expediente.juzgado_id || "",
-        estados: expediente.expediente_estados?.map((e: any) => String(e.estados_expediente.id)) || [],
-        personas:
-          expediente && expediente.expediente_personas
-            ? expediente.expediente_personas
-                .filter((p: any) => p && p.persona_id) // Filtrar entradas inválidas
-                .map((p: any) => ({
-                  id: p.persona_id,
-                  rol: p.rol || "",
-                }))
-            : [],
+  // Extraer personas de manera segura del expediente (solo una vez al inicio)
+  useEffect(() => {
+    try {
+      if (expediente) {
+        let personasDefault: { id: string; rol: string }[] = []
+        if (expediente.expediente_personas && Array.isArray(expediente.expediente_personas)) {
+          personasDefault = expediente.expediente_personas
+            .filter((p: any) => p && typeof p === "object" && p.persona_id)
+            .map((p: any) => ({
+              id: p.persona_id,
+              rol: p.rol || "",
+            }))
+        }
+        setPersonasArray(personasDefault)
       }
-    : {
+    } catch (error) {
+      console.error("Error al extraer personas del expediente:", error)
+      setPersonasArray([])
+    }
+  }, [expediente])
+
+  // Preparar valores por defecto de manera segura
+  const getDefaultValues = () => {
+    try {
+      if (expediente) {
+        // Extraer estados de manera segura
+        let estadosDefault: string[] = []
+        if (expediente.expediente_estados && Array.isArray(expediente.expediente_estados)) {
+          estadosDefault = expediente.expediente_estados
+            .filter(
+              (e: any) => e && typeof e === "object" && e.estados_expediente && e.estados_expediente.id !== undefined,
+            )
+            .map((e: any) => String(e.estados_expediente.id))
+        }
+
+        return {
+          numero: expediente.numero || "",
+          numero_judicial: expediente.numero_judicial || "",
+          fecha_inicio: expediente.fecha_inicio ? new Date(expediente.fecha_inicio) : new Date(),
+          fecha_inicio_judicial: expediente.fecha_inicio_judicial
+            ? new Date(expediente.fecha_inicio_judicial)
+            : undefined,
+          monto_total: expediente.monto_total ? String(expediente.monto_total) : "",
+          juzgado_id: expediente.juzgado_id || "",
+          estados: estadosDefault,
+          personas: [], // Inicialmente vacío, se actualizará después
+        }
+      } else {
+        // Valores por defecto para un nuevo expediente
+        return {
+          numero: "",
+          numero_judicial: "",
+          fecha_inicio: new Date(),
+          monto_total: "",
+          juzgado_id: "",
+          estados: [],
+          personas: [],
+        }
+      }
+    } catch (error) {
+      console.error("Error al preparar valores por defecto:", error)
+      // En caso de error, devolver valores por defecto básicos
+      return {
         numero: "",
         numero_judicial: "",
-        fecha_inicio: new Date(), // Fecha actual por defecto
-        // Eliminamos descripcion de los valores por defecto
+        fecha_inicio: new Date(),
         monto_total: "",
         juzgado_id: "",
         estados: [],
         personas: [],
       }
+    }
+  }
 
   const form = useForm<ExpedienteFormValues>({
     resolver: zodResolver(expedienteSchema),
-    defaultValues,
+    defaultValues: getDefaultValues(),
   })
 
-  // Efecto para actualizar los campos cuando se cambia de pestaña
+  // Actualizar el campo personas del formulario cuando cambie personasArray
   useEffect(() => {
-    if (activeTab === "personas") {
-      // Forzar una actualización de los campos de personas cuando se cambia a la pestaña de personas
-      setTimeout(() => {
-        const personas = form.getValues("personas") || []
-        if (personas.length > 0) {
-          form.trigger("personas")
-        }
-      }, 100)
+    if (personasArray.length > 0) {
+      form.setValue("personas", personasArray)
     }
-  }, [activeTab, form])
+    setFormInitialized(true)
+  }, [personasArray, form])
 
   // Manejar cambios en el monto para formatear automáticamente
   const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^\d]/g, "")
-    if (value) {
-      const numberValue = Number.parseInt(value, 10)
-      form.setValue("monto_total", String(numberValue))
-    } else {
-      form.setValue("monto_total", "")
+    try {
+      const value = e.target.value.replace(/[^\d]/g, "")
+      if (value) {
+        const numberValue = Number.parseInt(value, 10)
+        form.setValue("monto_total", String(numberValue))
+      } else {
+        form.setValue("monto_total", "")
+      }
+    } catch (error) {
+      console.error("Error al manejar cambio de monto:", error)
     }
   }
 
   // Agregar persona al expediente
   const addPersona = () => {
-    const personas = form.getValues("personas") || []
-    form.setValue("personas", [...personas, { id: "", rol: "" }])
-
-    // Forzar una actualización del formulario para que los nuevos campos se rendericen correctamente
-    setTimeout(() => {
-      form.trigger("personas")
-    }, 100)
+    try {
+      const newPersona = { id: "", rol: "" }
+      const updatedPersonas = [...personasArray, newPersona]
+      setPersonasArray(updatedPersonas)
+      form.setValue("personas", updatedPersonas)
+    } catch (error) {
+      console.error("Error al agregar persona:", error)
+    }
   }
 
   // Eliminar persona del expediente
   const removePersona = (index: number) => {
-    const personas = form.getValues("personas") || []
-    form.setValue(
-      "personas",
-      personas.filter((_, i) => i !== index),
-    )
+    try {
+      const updatedPersonas = personasArray.filter((_, i) => i !== index)
+      setPersonasArray(updatedPersonas)
+      form.setValue("personas", updatedPersonas)
+    } catch (error) {
+      console.error("Error al eliminar persona:", error)
+    }
   }
 
-  // Obtener todas las personas disponibles
+  // Actualizar persona en el expediente
+  const updatePersona = (index: number, field: "id" | "rol", value: string) => {
+    try {
+      const updatedPersonas = [...personasArray]
+      if (updatedPersonas[index]) {
+        updatedPersonas[index] = {
+          ...updatedPersonas[index],
+          [field]: value,
+        }
+        setPersonasArray(updatedPersonas)
+        form.setValue("personas", updatedPersonas)
+      }
+    } catch (error) {
+      console.error(`Error al actualizar ${field} de persona:`, error)
+    }
+  }
+
+  // Preparar lista de todas las personas disponibles
   const getAllPersonas = () => {
-    // Filtrar elementos undefined o nulos antes de mapearlos
-    return [
-      ...clientes.filter(Boolean).map((c) => ({ ...c, tipo: "Cliente" })),
-      ...abogados.filter(Boolean).map((a) => ({ ...a, tipo: "Abogado" })),
-      ...aseguradoras.filter(Boolean).map((a) => ({ ...a, tipo: "Aseguradora" })),
-      ...mediadores.filter(Boolean).map((m) => ({ ...m, tipo: "Mediador" })),
-      ...peritos.filter(Boolean).map((p) => ({ ...p, tipo: "Perito" })),
-    ]
+    try {
+      const allPersonas = []
+
+      // Agregar clientes si existen
+      if (clientes && Array.isArray(clientes)) {
+        for (const cliente of clientes) {
+          if (cliente && typeof cliente === "object" && cliente.id && cliente.nombre) {
+            allPersonas.push({ ...cliente, tipo: "Cliente" })
+          }
+        }
+      }
+
+      // Agregar abogados si existen
+      if (abogados && Array.isArray(abogados)) {
+        for (const abogado of abogados) {
+          if (abogado && typeof abogado === "object" && abogado.id && abogado.nombre) {
+            allPersonas.push({ ...abogado, tipo: "Abogado" })
+          }
+        }
+      }
+
+      // Agregar aseguradoras si existen
+      if (aseguradoras && Array.isArray(aseguradoras)) {
+        for (const aseguradora of aseguradoras) {
+          if (aseguradora && typeof aseguradora === "object" && aseguradora.id && aseguradora.nombre) {
+            allPersonas.push({ ...aseguradora, tipo: "Aseguradora" })
+          }
+        }
+      }
+
+      // Agregar mediadores si existen
+      if (mediadores && Array.isArray(mediadores)) {
+        for (const mediador of mediadores) {
+          if (mediador && typeof mediador === "object" && mediador.id && mediador.nombre) {
+            allPersonas.push({ ...mediador, tipo: "Mediador" })
+          }
+        }
+      }
+
+      // Agregar peritos si existen
+      if (peritos && Array.isArray(peritos)) {
+        for (const perito of peritos) {
+          if (perito && typeof perito === "object" && perito.id && perito.nombre) {
+            allPersonas.push({ ...perito, tipo: "Perito" })
+          }
+        }
+      }
+
+      return allPersonas
+    } catch (error) {
+      console.error("Error al obtener todas las personas:", error)
+      return []
+    }
   }
 
   // Verificar si el número de expediente ya existe
   const checkNumeroExists = async (numero: string): Promise<boolean> => {
-    if (!numero) return false
+    try {
+      if (!numero) return false
 
-    // Si estamos editando un expediente existente y el número no ha cambiado, no es un duplicado
-    if (expediente && expediente.numero === numero) return false
+      // Si estamos editando un expediente existente y el número no ha cambiado, no es un duplicado
+      if (expediente && expediente.numero === numero) return false
 
-    const { data, error } = await supabase.from("expedientes").select("id").eq("numero", numero).maybeSingle()
+      const { data, error } = await supabase.from("expedientes").select("id").eq("numero", numero).maybeSingle()
 
-    if (error) {
+      if (error) {
+        console.error("Error al verificar número de expediente:", error)
+        return false
+      }
+
+      return !!data
+    } catch (error) {
       console.error("Error al verificar número de expediente:", error)
       return false
     }
-
-    return !!data
   }
 
   async function onSubmit(data: ExpedienteFormValues) {
@@ -216,9 +337,8 @@ export function ExpedienteForm({
       const expedienteData = {
         numero: data.numero,
         numero_judicial: data.numero_judicial || null,
-        fecha_inicio: data.fecha_inicio.toISOString(), // Ya no es opcional
+        fecha_inicio: data.fecha_inicio.toISOString(),
         fecha_inicio_judicial: data.fecha_inicio_judicial?.toISOString() || null,
-        // Eliminamos el campo descripcion del objeto que se envía a la base de datos
         monto_total: data.monto_total ? Number.parseInt(data.monto_total, 10) : null,
         juzgado_id: data.juzgado_id === "none" ? null : data.juzgado_id || null,
       }
@@ -254,11 +374,10 @@ export function ExpedienteForm({
         if (deleteEstadosError) throw deleteEstadosError
       }
 
-      // Insertar nuevos estados - Eliminamos el campo fecha que no existe en la tabla
+      // Insertar nuevos estados
       const estadosData = data.estados.map((estadoId) => ({
         expediente_id: expedienteId,
         estado_id: Number.parseInt(estadoId, 10),
-        // Eliminamos el campo fecha que estaba causando el error
       }))
 
       if (estadosData.length > 0) {
@@ -280,7 +399,7 @@ export function ExpedienteForm({
 
       // Insertar nuevas personas
       const personasData = data.personas
-        .filter((p) => p.id !== "none" && p.rol !== "none" && p.id && p.rol) // Filtrar entradas vacías o con valores "none"
+        .filter((p) => p.id && p.rol) // Filtrar entradas vacías
         .map((persona) => ({
           expediente_id: expedienteId,
           persona_id: persona.id,
@@ -319,6 +438,19 @@ export function ExpedienteForm({
       })
       setIsSubmitting(false)
     }
+  }
+
+  // Si el formulario aún no está inicializado, mostrar un estado de carga
+  if (!formInitialized && expediente) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex justify-center items-center h-40">
+            <p>Cargando formulario...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -444,8 +576,6 @@ export function ExpedienteForm({
                       </FormItem>
                     )}
                   />
-
-                  {/* Eliminamos el campo de descripción del formulario */}
                 </div>
               </TabsContent>
 
@@ -516,7 +646,7 @@ export function ExpedienteForm({
                   </Button>
                 </div>
 
-                {form.getValues("personas")?.length === 0 && (
+                {personasArray.length === 0 && (
                   <div className="text-center py-8 border rounded-md">
                     <p className="text-muted-foreground">No hay personas vinculadas</p>
                     <Button type="button" onClick={addPersona} variant="link">
@@ -525,7 +655,7 @@ export function ExpedienteForm({
                   </div>
                 )}
 
-                {form.getValues("personas")?.map((_, index) => (
+                {personasArray.map((persona, index) => (
                   <div key={index} className="border rounded-md p-4 space-y-4">
                     <div className="flex justify-between items-center">
                       <h4 className="font-medium">Persona {index + 1}</h4>
@@ -534,59 +664,45 @@ export function ExpedienteForm({
                       </Button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name={`personas.${index}.id`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Persona</FormLabel>
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccionar persona" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {getAllPersonas()
-                                  .filter((persona) => persona && persona.id && persona.nombre) // Asegurar que persona tenga id y nombre
-                                  .map((persona) => (
-                                    <SelectItem key={persona.id} value={persona.id}>
-                                      {persona.nombre} ({persona.tipo})
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
+                      {/* Selector de Persona */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Persona</label>
+                        <Select value={persona.id} onValueChange={(value) => updatePersona(index, "id", value)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar persona" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getAllPersonas().map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.nombre} ({p.tipo})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {form.formState.errors.personas?.[index]?.id && (
+                          <p className="text-sm text-destructive">La persona es obligatoria</p>
                         )}
-                      />
+                      </div>
 
-                      <FormField
-                        control={form.control}
-                        name={`personas.${index}.rol`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Rol</FormLabel>
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Seleccionar rol" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="Actora">Actora</SelectItem>
-                                <SelectItem value="Demandada">Demandada</SelectItem>
-                                <SelectItem value="Tercero">Tercero</SelectItem>
-                                <SelectItem value="Abogado Actora">Abogado Actora</SelectItem>
-                                <SelectItem value="Abogado Demandada">Abogado Demandada</SelectItem>
-                                <SelectItem value="Mediador">Mediador</SelectItem>
-                                <SelectItem value="Perito">Perito</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
+                      {/* Selector de Rol */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Rol</label>
+                        <Select value={persona.rol} onValueChange={(value) => updatePersona(index, "rol", value)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar rol" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ROLES_DISPONIBLES.map((rol) => (
+                              <SelectItem key={rol.value} value={rol.value}>
+                                {rol.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {form.formState.errors.personas?.[index]?.rol && (
+                          <p className="text-sm text-destructive">El rol es obligatorio</p>
                         )}
-                      />
+                      </div>
                     </div>
                   </div>
                 ))}
