@@ -7,15 +7,16 @@ import {
   Briefcase,
   FileText,
   Home,
-  LayoutDashboard,
   Users,
   Building,
   Scale,
   Gavel,
-  UserCheck,
   Microscope,
   ChevronDown,
   ChevronRight,
+  Calendar,
+  BarChart3,
+  Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"
@@ -36,13 +37,33 @@ export function Sidebar() {
   const mainRoutes = [
     {
       href: "/",
-      icon: LayoutDashboard,
-      title: "Dashboard",
+      icon: Home,
+      title: "Inicio",
+      color: "#3b82f6", // Azul
     },
     {
       href: "/expedientes",
       icon: FileText,
       title: "Expedientes",
+      color: "#8b5cf6", // Morado
+    },
+    {
+      href: "/calendario",
+      icon: Calendar,
+      title: "Calendario",
+      color: "#f97316", // Naranja
+    },
+    {
+      href: "/reportes",
+      icon: BarChart3,
+      title: "Reportes",
+      color: "#10b981", // Verde
+    },
+    {
+      href: "/configuracion",
+      icon: Settings,
+      title: "Configuración",
+      color: "#6b7280", // Gris
     },
   ]
 
@@ -51,36 +72,43 @@ export function Sidebar() {
       href: "/personas",
       icon: Users,
       title: "Todas las Personas",
+      color: "#ef4444", // Rojo
     },
     {
       href: "/clientes",
-      icon: UserCheck,
+      icon: Users,
       title: "Clientes",
+      color: "#ef4444", // Rojo
     },
     {
       href: "/aseguradoras",
       icon: Building,
       title: "Aseguradoras",
+      color: "#ef4444", // Rojo
     },
     {
       href: "/abogados",
       icon: Briefcase,
       title: "Abogados",
+      color: "#ef4444", // Rojo
     },
     {
       href: "/juzgados",
       icon: Scale,
       title: "Juzgados",
+      color: "#ef4444", // Rojo
     },
     {
       href: "/mediadores",
       icon: Gavel,
       title: "Mediadores",
+      color: "#ef4444", // Rojo
     },
     {
       href: "/peritos",
       icon: Microscope,
       title: "Peritos",
+      color: "#ef4444", // Rojo
     },
   ]
 
@@ -89,7 +117,7 @@ export function Sidebar() {
       <div className="flex h-full w-16 flex-col border-r bg-muted/40 md:w-64">
         <div className="flex h-16 items-center border-b px-4">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <Home className="h-6 w-6" />
+            <Home className="h-6 w-6 text-blue-500" />
             <span className="hidden md:inline-flex">Estudio GMB</span>
           </Link>
         </div>
@@ -108,7 +136,7 @@ export function Sidebar() {
                         pathname === route.href ? "bg-accent text-accent-foreground" : "transparent",
                       )}
                     >
-                      <Icon className="h-5 w-5" />
+                      <Icon className="h-5 w-5" style={{ color: route.color }} />
                       <span className="hidden md:inline-flex">{route.title}</span>
                     </Link>
                   </TooltipTrigger>
@@ -133,7 +161,7 @@ export function Sidebar() {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <Users className="h-5 w-5" />
+                        <Users className="h-5 w-5" style={{ color: "#ef4444" }} />
                         <span className="hidden md:inline-flex">Personas</span>
                       </div>
                       <div className="hidden md:block">
@@ -160,7 +188,7 @@ export function Sidebar() {
                             pathname === route.href ? "bg-accent text-accent-foreground" : "transparent",
                           )}
                         >
-                          <Icon className="h-4 w-4" />
+                          <Icon className="h-4 w-4" style={{ color: route.color }} />
                           <span className="hidden md:inline-flex">{route.title}</span>
                         </Link>
                       </TooltipTrigger>
