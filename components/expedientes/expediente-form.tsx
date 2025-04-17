@@ -12,7 +12,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { DatePicker } from "@/components/ui/date-picker"
@@ -27,7 +26,7 @@ const expedienteSchema = z.object({
   numero_judicial: z.string().optional(),
   fecha_inicio: z.date().optional(),
   fecha_inicio_judicial: z.date().optional(),
-  descripcion: z.string().optional(),
+  // Eliminamos descripcion del esquema ya que no existe en la base de datos
   monto_total: z.string().optional(),
   juzgado_id: z.string().optional(),
   estados: z.array(z.string()).min(1, "Debe seleccionar al menos un estado"),
@@ -89,7 +88,7 @@ export function ExpedienteForm({
         fecha_inicio_judicial: expediente.fecha_inicio_judicial
           ? new Date(expediente.fecha_inicio_judicial)
           : undefined,
-        descripcion: expediente.descripcion || "",
+        // Eliminamos descripcion de los valores por defecto
         monto_total: expediente.monto_total ? String(expediente.monto_total) : "",
         juzgado_id: expediente.juzgado_id || "",
         estados: expediente.expediente_estados?.map((e: any) => String(e.estados_expediente.id)) || [],
@@ -102,7 +101,7 @@ export function ExpedienteForm({
     : {
         numero: "",
         numero_judicial: "",
-        descripcion: "",
+        // Eliminamos descripcion de los valores por defecto
         monto_total: "",
         juzgado_id: "",
         estados: [],
@@ -159,7 +158,7 @@ export function ExpedienteForm({
         numero_judicial: data.numero_judicial || null,
         fecha_inicio: data.fecha_inicio?.toISOString() || null,
         fecha_inicio_judicial: data.fecha_inicio_judicial?.toISOString() || null,
-        descripcion: data.descripcion || null,
+        // Eliminamos el campo descripcion del objeto que se envía a la base de datos
         monto_total: data.monto_total ? Number.parseInt(data.monto_total, 10) : null,
         juzgado_id: data.juzgado_id === "none" ? null : data.juzgado_id || null,
       }
@@ -381,20 +380,7 @@ export function ExpedienteForm({
                     )}
                   />
 
-                  {/* Descripción */}
-                  <FormField
-                    control={form.control}
-                    name="descripcion"
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>Descripción</FormLabel>
-                        <FormControl>
-                          <Textarea {...field} rows={4} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {/* Eliminamos el campo de descripción del formulario */}
                 </div>
               </TabsContent>
 

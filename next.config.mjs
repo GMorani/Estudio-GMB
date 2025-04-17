@@ -13,7 +13,8 @@ const nextConfig = {
     unoptimized: true,
   },
   experimental: {
-    optimizeCss: true,
+    // Remove the optimizeCss option that's causing the error
+    // optimizeCss: true,
   },
   // Configuración para limitar el número de solicitudes simultáneas
   httpAgentOptions: {
