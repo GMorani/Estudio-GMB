@@ -326,42 +326,54 @@ export function ClienteForm({ cliente, clientesReferidos }: ClienteFormProps) {
               />
 
               {/* Email */}
-              <div className="space-y-2">
-                <FormLabel>Correo electrónico</FormLabel>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Input
-                      value={form.getValues("email").split("@")[0] || ""}
-                      onChange={handleEmailChange}
-                      placeholder="correo"
-                    />
-                  </div>
-
-                  <Select value={dominioEmail} onValueChange={handleDominioChange}>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Dominio" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="@gmail.com">@gmail.com</SelectItem>
-                      <SelectItem value="@hotmail.com">@hotmail.com</SelectItem>
-                      <SelectItem value="@outlook.com">@outlook.com</SelectItem>
-                      <SelectItem value="@yahoo.com.ar">@yahoo.com.ar</SelectItem>
-                      <SelectItem value="otro">Otro</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {emailPersonalizado && (
-                  <Input
-                    value={form.getValues("email")}
-                    onChange={(e) => form.setValue("email", e.target.value)}
-                    placeholder="correo@dominio.com"
-                    className="mt-2"
-                  />
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Correo electrónico</FormLabel>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <FormControl>
+                            <Input
+                              {...field}
+                              value={field.value.split("@")[0] || ""}
+                              onChange={(e) => {
+                                handleEmailChange(e)
+                              }}
+                              placeholder="correo"
+                            />
+                          </FormControl>
+                        </div>
+                        <Select value={dominioEmail} onValueChange={handleDominioChange}>
+                          <SelectTrigger className="w-[180px]">
+                            <SelectValue placeholder="Dominio" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="@gmail.com">@gmail.com</SelectItem>
+                            <SelectItem value="@hotmail.com">@hotmail.com</SelectItem>
+                            <SelectItem value="@outlook.com">@outlook.com</SelectItem>
+                            <SelectItem value="@yahoo.com.ar">@yahoo.com.ar</SelectItem>
+                            <SelectItem value="otro">Otro</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {emailPersonalizado && (
+                        <FormControl>
+                          <Input
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.value)}
+                            placeholder="correo@dominio.com"
+                            className="mt-2"
+                          />
+                        </FormControl>
+                      )}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
                 )}
-                {form.formState.errors.email && (
-                  <p className="text-sm font-medium text-destructive">{form.formState.errors.email.message}</p>
-                )}
-              </div>
+              />
 
               {/* Referido */}
               <FormField
