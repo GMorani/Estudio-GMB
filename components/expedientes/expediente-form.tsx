@@ -39,6 +39,7 @@ const expedienteSchema = z.object({
         id: z.string().min(1, "La persona es obligatoria"),
         rol: z.string().min(1, "El rol es obligatorio"),
         tipo: z.string().optional(),
+        relacion_id: z.string().optional(),
       }),
     )
     .min(1, "Debe agregar al menos una persona"),
@@ -98,15 +99,20 @@ export function ExpedienteForm({
   const supabase = createClientComponentClient()
   const [activeTab, setActiveTab] = useState("general")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [personasArray, setPersonasArray] = useState<{ id: string; rol: string; tipo?: string }[]>([])
+  const [personasArray, setPersonasArray] = useState<
+    { id: string; rol: string; tipo?: string; relacion_id?: string }[]
+  >([])
   const [formInitialized, setFormInitialized] = useState(false)
   const [estadosArray, setEstadosArray] = useState<string[]>([])
   const [autosGenerado, setAutosGenerado] = useState("")
+  // Almacenar las relaciones entre aseguradoras y demandadas (ya que no existe la columna en la BD)
+  const [relacionesAseguradoras, setRelacionesAseguradoras] = useState<Record<string, string>>({})
 
   // Preparar valores por defecto de manera segura
   const getDefaultValues = () => {
     try {
       if (expediente) {
+        console.log("Cargando objeto del expediente:", expediente.objeto)
         return {
           numero: expediente.numero || "",
           numero_judicial: expediente.numero_judicial || "",
@@ -185,24 +191,53 @@ export function ExpedienteForm({
   useEffect(() => {
     try {
       if (expediente) {
-        let personasDefault: { id: string; rol: string; tipo?: string }[] = []
+        let personasDefault: { id: string; rol: string; tipo?: string; relacion_id?: string }[] = []
+        const relacionesTemp: Record<string, string> = {}
+
         if (expediente.expediente_personas && Array.isArray(expediente.expediente_personas)) {
           personasDefault = expediente.expediente_personas
             .filter((p: any) => p && typeof p === "object" && p.persona_id)
             .map((p: any) => {
               // Determinar el tipo de persona basado en el rol
               let tipo = undefined
+              let relacion_id = ""
+
               if (p.rol === "Citada en Garantía") {
                 tipo = "aseguradora"
+
+                // Buscar la relación con la persona demandada
+                // Esto es una simulación ya que no tenemos la columna en la BD
+                // Podríamos usar metadatos o alguna convención para almacenar esta información
+
+                // Buscar entre las demandadas
+                const demandadas = expediente.expediente_personas.filter((d: any) => d && d.rol === "Demandada")
+
+                if (demandadas.length > 0) {
+                  // Asumimos que la primera demandada es la relacionada con esta aseguradora
+                  relacion_id = demandadas[0].persona_id || ""
+
+                  // Guardar la relación para usarla después
+                  if (p.persona_id && relacion_id) {
+                    relacionesTemp[p.persona_id] = relacion_id
+                  }
+                }
               }
 
               return {
                 id: p.persona_id,
                 rol: p.rol || "",
                 tipo,
+                relacion_id,
               }
             })
         }
+
+        // Actualizar el estado de relaciones
+        if (Object.keys(relacionesTemp).length > 0) {
+          setRelacionesAseguradoras(relacionesTemp)
+          console.log("Relaciones de aseguradoras cargadas:", relacionesTemp)
+        }
+
         setPersonasArray(personasDefault)
       }
     } catch (error) {
@@ -329,7 +364,7 @@ export function ExpedienteForm({
   }
 
   // Actualizar persona en el expediente
-  const updatePersona = (index: number, field: "id" | "rol", value: string) => {
+  const updatePersona = (index: number, field: "id" | "rol" | "relacion_id", value: string) => {
     try {
       const updatedPersonas = [...personasArray]
       if (updatedPersonas[index]) {
@@ -338,6 +373,14 @@ export function ExpedienteForm({
           [field]: value,
         }
         setPersonasArray(updatedPersonas)
+
+        // Si estamos actualizando la relación, guardarla en el estado local
+        if (field === "relacion_id" && updatedPersonas[index].id) {
+          setRelacionesAseguradoras({
+            ...relacionesAseguradoras,
+            [updatedPersonas[index].id]: value,
+          })
+        }
 
         // Actualizar explícitamente el campo personas en el formulario
         form.setValue("personas", updatedPersonas, {
@@ -517,12 +560,14 @@ export function ExpedienteForm({
       }
 
       // Filtrar y validar personas antes de insertar
+      // IMPORTANTE: Eliminamos relacion_id del objeto que se envía a la base de datos
       const personasData = data.personas
         .filter((p) => p && p.id && p.id.trim() !== "" && p.rol && p.rol.trim() !== "") // Filtrar entradas vacías o inválidas
-        .map((persona) => ({
+        .map(({ id, rol }) => ({
+          // Desestructuramos para solo tomar id y rol
           expediente_id: expedienteId,
-          persona_id: persona.id,
-          rol: persona.rol,
+          persona_id: id,
+          rol: rol,
         }))
 
       if (personasData.length > 0) {
@@ -538,6 +583,10 @@ export function ExpedienteForm({
         fecha: new Date().toISOString(),
         automatica: true,
       })
+
+      // 5. Almacenar las relaciones en algún lugar (por ejemplo, en localStorage o en una tabla separada)
+      // Esto es opcional y se puede implementar más adelante si es necesario
+      console.log("Relaciones de aseguradoras:", relacionesAseguradoras)
 
       toast({
         title: expediente ? "Expediente actualizado" : "Expediente creado",
@@ -558,6 +607,18 @@ export function ExpedienteForm({
       setIsSubmitting(false)
     }
   }
+
+  // Asegurarse de que el objeto se establezca correctamente
+  useEffect(() => {
+    if (expediente && expediente.objeto) {
+      console.log("Estableciendo objeto en el formulario:", expediente.objeto)
+      form.setValue("objeto", expediente.objeto, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      })
+    }
+  }, [expediente, form])
 
   // Si el formulario aún no está inicializado, mostrar un estado de carga
   if (!formInitialized && expediente) {
@@ -832,7 +893,7 @@ export function ExpedienteForm({
                       type="button"
                       onClick={() => {
                         // Agregar una aseguradora como persona con rol predefinido
-                        const newPersona = { id: "", rol: "Citada en Garantía", tipo: "aseguradora" }
+                        const newPersona = { id: "", rol: "Citada en Garantía", tipo: "aseguradora", relacion_id: "" }
                         const updatedPersonas = [...personasArray, newPersona]
                         setPersonasArray(updatedPersonas)
 
@@ -876,7 +937,7 @@ export function ExpedienteForm({
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {/* Selector de Persona */}
                       <div className="space-y-2">
                         <label className="text-sm font-medium">
@@ -934,6 +995,33 @@ export function ExpedienteForm({
                           <p className="text-sm text-destructive">El rol es obligatorio</p>
                         )}
                       </div>
+
+                      {/* Selector de Relación (solo para aseguradoras) */}
+                      {persona.tipo === "aseguradora" && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Relación</label>
+                          <Select
+                            value={persona.relacion_id || ""}
+                            onValueChange={(value) => updatePersona(index, "relacion_id", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar demandada" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {personasArray
+                                .filter((p, i) => p.rol === "Demandada" && i !== index)
+                                .map((p, i) => {
+                                  const personaInfo = getAllPersonas().find((persona) => persona.id === p.id)
+                                  return (
+                                    <SelectItem key={`${p.id}-${i}`} value={p.id}>
+                                      {personaInfo ? personaInfo.nombre : "Persona sin nombre"}
+                                    </SelectItem>
+                                  )
+                                })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
