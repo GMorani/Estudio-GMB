@@ -38,6 +38,7 @@ const expedienteSchema = z.object({
       z.object({
         id: z.string().min(1, "La persona es obligatoria"),
         rol: z.string().min(1, "El rol es obligatorio"),
+        tipo: z.string().optional(),
       }),
     )
     .min(1, "Debe agregar al menos una persona"),
@@ -76,6 +77,7 @@ const ROLES_DISPONIBLES = [
   { value: "Abogado Demandada", label: "Abogado Demandada" },
   { value: "Mediador", label: "Mediador" },
   { value: "Perito", label: "Perito" },
+  { value: "Citada en Garantía", label: "Citada en Garantía" },
 ]
 
 // Objetos disponibles para los expedientes
@@ -96,7 +98,7 @@ export function ExpedienteForm({
   const supabase = createClientComponentClient()
   const [activeTab, setActiveTab] = useState("general")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [personasArray, setPersonasArray] = useState<{ id: string; rol: string }[]>([])
+  const [personasArray, setPersonasArray] = useState<{ id: string; rol: string; tipo?: string }[]>([])
   const [formInitialized, setFormInitialized] = useState(false)
   const [estadosArray, setEstadosArray] = useState<string[]>([])
   const [autosGenerado, setAutosGenerado] = useState("")
@@ -183,14 +185,23 @@ export function ExpedienteForm({
   useEffect(() => {
     try {
       if (expediente) {
-        let personasDefault: { id: string; rol: string }[] = []
+        let personasDefault: { id: string; rol: string; tipo?: string }[] = []
         if (expediente.expediente_personas && Array.isArray(expediente.expediente_personas)) {
           personasDefault = expediente.expediente_personas
             .filter((p: any) => p && typeof p === "object" && p.persona_id)
-            .map((p: any) => ({
-              id: p.persona_id,
-              rol: p.rol || "",
-            }))
+            .map((p: any) => {
+              // Determinar el tipo de persona basado en el rol
+              let tipo = undefined
+              if (p.rol === "Citada en Garantía") {
+                tipo = "aseguradora"
+              }
+
+              return {
+                id: p.persona_id,
+                rol: p.rol || "",
+                tipo,
+              }
+            })
         }
         setPersonasArray(personasDefault)
       }
@@ -820,8 +831,8 @@ export function ExpedienteForm({
                     <Button
                       type="button"
                       onClick={() => {
-                        // Agregar una aseguradora como persona
-                        const newPersona = { id: "", rol: "Aseguradora" }
+                        // Agregar una aseguradora como persona con rol predefinido
+                        const newPersona = { id: "", rol: "Citada en Garantía", tipo: "aseguradora" }
                         const updatedPersonas = [...personasArray, newPersona]
                         setPersonasArray(updatedPersonas)
 
@@ -858,7 +869,9 @@ export function ExpedienteForm({
                 {personasArray.map((persona, index) => (
                   <div key={index} className="border rounded-md p-4 space-y-4">
                     <div className="flex justify-between items-center">
-                      <h4 className="font-medium">Persona {index + 1}</h4>
+                      <h4 className="font-medium">
+                        {persona.tipo === "aseguradora" ? "Aseguradora" : `Persona ${index + 1}`}
+                      </h4>
                       <Button type="button" onClick={() => removePersona(index)} variant="ghost" size="icon">
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -866,39 +879,57 @@ export function ExpedienteForm({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Selector de Persona */}
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Persona</label>
+                        <label className="text-sm font-medium">
+                          {persona.tipo === "aseguradora" ? "Aseguradora" : "Persona"}
+                        </label>
                         <Select value={persona.id} onValueChange={(value) => updatePersona(index, "id", value)}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar persona" />
+                            <SelectValue
+                              placeholder={`Seleccionar ${persona.tipo === "aseguradora" ? "aseguradora" : "persona"}`}
+                            />
                           </SelectTrigger>
                           <SelectContent>
-                            {getAllPersonas().map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.nombre} ({p.tipo})
-                              </SelectItem>
-                            ))}
+                            {persona.tipo === "aseguradora"
+                              ? aseguradoras.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.nombre}
+                                  </SelectItem>
+                                ))
+                              : getAllPersonas().map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.nombre} ({p.tipo})
+                                  </SelectItem>
+                                ))}
                           </SelectContent>
                         </Select>
                         {form.formState.errors.personas?.[index]?.id && (
-                          <p className="text-sm text-destructive">La persona es obligatoria</p>
+                          <p className="text-sm text-destructive">
+                            {persona.tipo === "aseguradora" ? "La aseguradora" : "La persona"} es obligatoria
+                          </p>
                         )}
                       </div>
 
                       {/* Selector de Rol */}
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Rol</label>
-                        <Select value={persona.rol} onValueChange={(value) => updatePersona(index, "rol", value)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar rol" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ROLES_DISPONIBLES.map((rol) => (
-                              <SelectItem key={rol.value} value={rol.value}>
-                                {rol.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        {persona.tipo === "aseguradora" ? (
+                          <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">
+                            Citada en Garantía
+                          </div>
+                        ) : (
+                          <Select value={persona.rol} onValueChange={(value) => updatePersona(index, "rol", value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar rol" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ROLES_DISPONIBLES.map((rol) => (
+                                <SelectItem key={rol.value} value={rol.value}>
+                                  {rol.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                         {form.formState.errors.personas?.[index]?.rol && (
                           <p className="text-sm text-destructive">El rol es obligatorio</p>
                         )}
