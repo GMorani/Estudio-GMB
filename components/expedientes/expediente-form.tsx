@@ -30,7 +30,9 @@ const expedienteSchema = z.object({
   fecha_inicio_judicial: z.date().optional(),
   monto_total: z.string().optional(),
   juzgado_id: z.string().optional(),
-  estados: z.array(z.string()).min(1, "Debe seleccionar al menos un estado"),
+  objeto: z.string().min(1, "El objeto es obligatorio"),
+  autos: z.string().optional(),
+  estados: z.array(z.string()).optional().default([]),
   personas: z
     .array(
       z.object({
@@ -76,6 +78,9 @@ const ROLES_DISPONIBLES = [
   { value: "Perito", label: "Perito" },
 ]
 
+// Objetos disponibles para los expedientes
+const OBJETOS_DISPONIBLES = [{ value: "Daños y Perjuicios", label: "Daños y Perjuicios" }]
+
 export function ExpedienteForm({
   expediente,
   juzgados = [],
@@ -94,6 +99,7 @@ export function ExpedienteForm({
   const [personasArray, setPersonasArray] = useState<{ id: string; rol: string }[]>([])
   const [formInitialized, setFormInitialized] = useState(false)
   const [estadosArray, setEstadosArray] = useState<string[]>([])
+  const [autosGenerado, setAutosGenerado] = useState("")
 
   // Preparar valores por defecto de manera segura
   const getDefaultValues = () => {
@@ -108,6 +114,8 @@ export function ExpedienteForm({
             : undefined,
           monto_total: expediente.monto_total ? String(expediente.monto_total) : "",
           juzgado_id: expediente.juzgado_id || "",
+          objeto: expediente.objeto || "",
+          autos: expediente.autos || "",
           estados: [], // Se actualizará después con useEffect
           personas: [], // Se actualizará después con useEffect
         }
@@ -119,6 +127,8 @@ export function ExpedienteForm({
           fecha_inicio: new Date(),
           monto_total: "",
           juzgado_id: "",
+          objeto: "",
+          autos: "",
           estados: [],
           personas: [],
         }
@@ -132,6 +142,8 @@ export function ExpedienteForm({
         fecha_inicio: new Date(),
         monto_total: "",
         juzgado_id: "",
+        objeto: "",
+        autos: "",
         estados: [],
         personas: [],
       }
@@ -148,22 +160,18 @@ export function ExpedienteForm({
     try {
       if (expediente && expediente.expediente_estados && Array.isArray(expediente.expediente_estados)) {
         const estadosIds = expediente.expediente_estados
-          .filter(
-            (e: any) => e && typeof e === "object" && e.estados_expediente && e.estados_expediente.id !== undefined,
-          )
-          .map((e: any) => String(e.estados_expediente.id))
+          .filter((e: any) => e && typeof e === "object" && e.estado_id !== undefined)
+          .map((e: any) => String(e.estado_id))
 
         console.log("Estados extraídos:", estadosIds)
         setEstadosArray(estadosIds)
 
         // Actualizar el formulario con los estados extraídos
-        if (estadosIds.length > 0) {
-          form.setValue("estados", estadosIds, {
-            shouldValidate: true,
-            shouldDirty: true,
-            shouldTouch: true,
-          })
-        }
+        form.setValue("estados", estadosIds, {
+          shouldValidate: true,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
       }
     } catch (error) {
       console.error("Error al extraer estados del expediente:", error)
@@ -203,6 +211,63 @@ export function ExpedienteForm({
     }
     setFormInitialized(true)
   }, [personasArray, form])
+
+  // Generar automáticamente el campo "Autos" cuando cambien las personas o el objeto
+  useEffect(() => {
+    try {
+      const personas = form.watch("personas") || []
+      const objeto = form.watch("objeto") || ""
+
+      // Buscar la persona con rol "Actora"
+      const actora = personas.find((p) => p.rol === "Actora")
+      // Buscar la persona con rol "Demandada"
+      const demandada = personas.find((p) => p.rol === "Demandada")
+
+      let nombreActora = ""
+      let nombreDemandada = ""
+
+      // Obtener el nombre de la actora
+      if (actora && actora.id) {
+        const personaActora = getAllPersonas().find((p) => p.id === actora.id)
+        if (personaActora) {
+          nombreActora = personaActora.nombre
+        }
+      }
+
+      // Obtener el nombre de la demandada
+      if (demandada && demandada.id) {
+        const personaDemandada = getAllPersonas().find((p) => p.id === demandada.id)
+        if (personaDemandada) {
+          nombreDemandada = personaDemandada.nombre
+        }
+      }
+
+      // Generar el texto de "Autos"
+      let autos = ""
+      if (nombreActora) {
+        autos = nombreActora
+        if (nombreDemandada) {
+          autos += " C/ " + nombreDemandada
+        }
+        if (objeto) {
+          autos += " S/ " + objeto
+        }
+      }
+
+      setAutosGenerado(autos)
+
+      // Actualizar el campo "autos" en el formulario
+      if (autos) {
+        form.setValue("autos", autos, {
+          shouldValidate: false,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
+      }
+    } catch (error) {
+      console.error("Error al generar autos:", error)
+    }
+  }, [form.watch("personas"), form.watch("objeto"), form])
 
   // Manejar cambios en el monto para formatear automáticamente
   const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -380,6 +445,8 @@ export function ExpedienteForm({
         fecha_inicio_judicial: data.fecha_inicio_judicial?.toISOString() || null,
         monto_total: data.monto_total ? Number.parseInt(data.monto_total, 10) : null,
         juzgado_id: data.juzgado_id === "none" ? null : data.juzgado_id || null,
+        objeto: data.objeto,
+        autos: data.autos,
       }
 
       let expedienteId
@@ -414,15 +481,17 @@ export function ExpedienteForm({
       }
 
       // Insertar nuevos estados
-      const estadosData = data.estados.map((estadoId) => ({
-        expediente_id: expedienteId,
-        estado_id: Number.parseInt(estadoId, 10),
-      }))
+      if (data.estados && data.estados.length > 0) {
+        const estadosData = data.estados.map((estadoId) => ({
+          expediente_id: expedienteId,
+          estado_id: Number.parseInt(estadoId, 10),
+        }))
 
-      if (estadosData.length > 0) {
-        const { error: insertEstadosError } = await supabase.from("expediente_estados").insert(estadosData)
+        if (estadosData.length > 0) {
+          const { error: insertEstadosError } = await supabase.from("expediente_estados").insert(estadosData)
 
-        if (insertEstadosError) throw insertEstadosError
+          if (insertEstadosError) throw insertEstadosError
+        }
       }
 
       // 3. Manejar personas del expediente
@@ -617,6 +686,53 @@ export function ExpedienteForm({
                             value={field.value ? formatCurrency(Number.parseInt(field.value, 10)) : ""}
                           />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Objeto */}
+                  <FormField
+                    control={form.control}
+                    name="objeto"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Objeto <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar objeto" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {OBJETOS_DISPONIBLES.map((objeto) => (
+                              <SelectItem key={objeto.value} value={objeto.value}>
+                                {objeto.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>Este campo es obligatorio</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Autos (generado automáticamente) */}
+                  <FormField
+                    control={form.control}
+                    name="autos"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Autos (Nombre del expediente)</FormLabel>
+                        <FormControl>
+                          <Input {...field} readOnly className="bg-muted" />
+                        </FormControl>
+                        <FormDescription>
+                          Este campo se genera automáticamente a partir de la Actora, Demandada y Objeto
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

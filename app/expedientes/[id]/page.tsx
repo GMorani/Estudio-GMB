@@ -50,7 +50,9 @@ export default async function ExpedienteDetallePage({
         fecha_inicio,
         fecha_inicio_judicial,
         monto_total,
-        juzgado_id
+        juzgado_id,
+        objeto,
+        autos
       `)
       .eq("id", params.id)
       .single()
@@ -129,7 +131,10 @@ export default async function ExpedienteDetallePage({
                 <span className="sr-only">Volver</span>
               </Link>
             </Button>
-            <h1 className="text-3xl font-bold">Expediente {expediente.numero}</h1>
+            <div>
+              <h1 className="text-3xl font-bold">Expediente {expediente.numero}</h1>
+              {expediente.autos && <p className="text-muted-foreground">{expediente.autos}</p>}
+            </div>
           </div>
           <Button asChild>
             <Link href={`/expedientes/${params.id}/editar`}>
@@ -176,6 +181,12 @@ export default async function ExpedienteDetallePage({
                   <div>
                     <p className="text-sm text-muted-foreground">Juzgado</p>
                     <p>{juzgado.nombre}</p>
+                  </div>
+                )}
+                {expediente.objeto && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Objeto</p>
+                    <p>{expediente.objeto}</p>
                   </div>
                 )}
               </div>
