@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
@@ -188,6 +190,12 @@ export const SidebarTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHT
 SidebarTrigger.displayName = "SidebarTrigger"
 
 export const Sidebar = () => {
+  const [expandedGroup, setExpandedGroup] = React.useState<string | null>(null)
+
+  const toggleGroup = (group: string) => {
+    setExpandedGroup(expandedGroup === group ? null : group)
+  }
+
   return (
     <SidebarContent>
       <SidebarHeader>
@@ -276,165 +284,10 @@ export const Sidebar = () => {
                 Calendario
               </a>
             </SidebarMenuItem>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarSeparator className="my-2" />
-        <SidebarGroup>
-          <SidebarGroupLabel>Personas</SidebarGroupLabel>
-          <SidebarGroupContent>
             <SidebarMenuItem>
-              <a
-                href="/clientes"
-                className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mr-2"
-                >
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-                Clientes
-              </a>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <a
-                href="/abogados"
-                className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mr-2"
-                >
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
-                </svg>
-                Abogados
-              </a>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <a
-                href="/aseguradoras"
-                className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mr-2"
-                >
-                  <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-                  <path d="M13 5v2" />
-                  <path d="M13 17v2" />
-                  <path d="M13 11v2" />
-                </svg>
-                Aseguradoras
-              </a>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <a
-                href="/juzgados"
-                className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mr-2"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" />
-                  <path d="M7 7h.01" />
-                  <path d="M12 7h.01" />
-                  <path d="M17 7h.01" />
-                  <path d="M7 12h.01" />
-                  <path d="M12 12h.01" />
-                  <path d="M17 12h.01" />
-                  <path d="M7 17h.01" />
-                  <path d="M12 17h.01" />
-                  <path d="M17 17h.01" />
-                </svg>
-                Juzgados
-              </a>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <a
-                href="/mediadores"
-                className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mr-2"
-                >
-                  <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1" />
-                  <path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1" />
-                  <path d="M12 12v3" />
-                  <path d="M8 21v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  <path d="M12 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
-                </svg>
-                Mediadores
-              </a>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <a href="/peritos" className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="mr-2"
-                >
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                </svg>
-                Peritos
-              </a>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <a
-                href="/personas"
-                className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
+              <div
+                onClick={() => toggleGroup("personas")}
+                className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary cursor-pointer"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -454,9 +307,205 @@ export const Sidebar = () => {
                   <path d="M16 3v4" />
                   <path d="M14 5h4" />
                 </svg>
-                Todas las Personas
-              </a>
+                Personas
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`ml-auto transition-transform duration-200 ${expandedGroup === "personas" ? "rotate-180" : ""}`}
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
             </SidebarMenuItem>
+            {expandedGroup === "personas" && (
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                  <a
+                    href="/clientes"
+                    className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    Clientes
+                  </a>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <a
+                    href="/abogados"
+                    className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2"
+                    >
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+                    </svg>
+                    Abogados
+                  </a>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <a
+                    href="/aseguradoras"
+                    className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2"
+                    >
+                      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+                      <path d="M13 5v2" />
+                      <path d="M13 17v2" />
+                      <path d="M13 11v2" />
+                    </svg>
+                    Aseguradoras
+                  </a>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <a
+                    href="/juzgados"
+                    className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2"
+                    >
+                      <rect width="18" height="18" x="3" y="3" rx="2" />
+                      <path d="M7 7h.01" />
+                      <path d="M12 7h.01" />
+                      <path d="M17 7h.01" />
+                      <path d="M7 12h.01" />
+                      <path d="M12 12h.01" />
+                      <path d="M17 12h.01" />
+                      <path d="M7 17h.01" />
+                      <path d="M12 17h.01" />
+                      <path d="M17 17h.01" />
+                    </svg>
+                    Juzgados
+                  </a>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <a
+                    href="/mediadores"
+                    className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2"
+                    >
+                      <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h1" />
+                      <path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1" />
+                      <path d="M12 12v3" />
+                      <path d="M8 21v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <path d="M12 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+                    </svg>
+                    Mediadores
+                  </a>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <a
+                    href="/peritos"
+                    className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2"
+                    >
+                      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+                      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+                    </svg>
+                    Peritos
+                  </a>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <a
+                    href="/personas"
+                    className="flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-secondary"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="mr-2"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-4-4h-4" />
+                      <path d="M16 3v4" />
+                      <path d="M14 5h4" />
+                    </svg>
+                    Todas las Personas
+                  </a>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarSeparator className="my-2" />
