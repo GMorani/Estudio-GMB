@@ -108,11 +108,14 @@ export function ExpedienteForm({
   // Almacenar las relaciones entre aseguradoras y demandadas (ya que no existe la columna en la BD)
   const [relacionesAseguradoras, setRelacionesAseguradoras] = useState<Record<string, string>>({})
 
-  // Preparar valores por defecto de manera segura
+  // Modificar la función getDefaultValues para asegurar que el objeto se cargue correctamente
   const getDefaultValues = () => {
     try {
       if (expediente) {
-        console.log("Cargando objeto del expediente:", expediente.objeto)
+        // Agregar log más detallado para depuración
+        console.log("Expediente recibido:", expediente)
+        console.log("Objeto del expediente:", expediente.objeto, typeof expediente.objeto)
+
         return {
           numero: expediente.numero || "",
           numero_judicial: expediente.numero_judicial || "",
@@ -122,7 +125,8 @@ export function ExpedienteForm({
             : undefined,
           monto_total: expediente.monto_total ? String(expediente.monto_total) : "",
           juzgado_id: expediente.juzgado_id || "",
-          objeto: expediente.objeto || "",
+          // Asegurar que el objeto tenga un valor por defecto válido
+          objeto: expediente.objeto || OBJETOS_DISPONIBLES[0].value,
           autos: expediente.autos || "",
           estados: [], // Se actualizará después con useEffect
           personas: [], // Se actualizará después con useEffect
@@ -135,7 +139,7 @@ export function ExpedienteForm({
           fecha_inicio: new Date(),
           monto_total: "",
           juzgado_id: "",
-          objeto: "",
+          objeto: OBJETOS_DISPONIBLES[0].value, // Establecer un valor por defecto
           autos: "",
           estados: [],
           personas: [],
@@ -150,7 +154,7 @@ export function ExpedienteForm({
         fecha_inicio: new Date(),
         monto_total: "",
         juzgado_id: "",
-        objeto: "",
+        objeto: OBJETOS_DISPONIBLES[0].value, // Establecer un valor por defecto
         autos: "",
         estados: [],
         personas: [],
@@ -163,18 +167,30 @@ export function ExpedienteForm({
     defaultValues: getDefaultValues(),
   })
 
-  // Inicializar el objeto cuando se carga el expediente
+  // Reemplazar el useEffect para inicializar el objeto con una versión mejorada
   useEffect(() => {
-    if (expediente && expediente.objeto) {
+    if (expediente) {
       console.log("Inicializando objeto del expediente:", expediente.objeto)
-      // Forzar la actualización del valor del objeto en el formulario
+
+      // Asegurar que el objeto se establezca correctamente, incluso si es undefined
+      const objetoValue = expediente.objeto || OBJETOS_DISPONIBLES[0].value
+
+      // Establecer el valor inmediatamente
+      form.setValue("objeto", objetoValue, {
+        shouldValidate: true,
+        shouldDirty: false,
+        shouldTouch: false,
+      })
+
+      // Y también con un pequeño retraso para asegurar que se aplique
       setTimeout(() => {
-        form.setValue("objeto", expediente.objeto, {
+        form.setValue("objeto", objetoValue, {
           shouldValidate: true,
           shouldDirty: false,
           shouldTouch: false,
         })
-      }, 100) // Pequeño retraso para asegurar que el formulario esté listo
+        console.log("Valor del objeto establecido con retraso:", objetoValue)
+      }, 200)
     }
   }, [expediente, form])
 
@@ -630,31 +646,7 @@ export function ExpedienteForm({
     }
   }
 
-  // Asegurarse de que el objeto se establezca correctamente
-  useEffect(() => {
-    if (expediente && expediente.objeto) {
-      console.log("Estableciendo objeto en el formulario:", expediente.objeto)
-      form.setValue("objeto", expediente.objeto, {
-        shouldValidate: true,
-        shouldDirty: true,
-        shouldTouch: true,
-      })
-    }
-  }, [expediente, form])
-
-  // Si el formulario aún no está inicializado, mostrar un estado de carga
-  if (!formInitialized && expediente) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex justify-center items-center h-40">
-            <p>Cargando formulario...</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
+  // Modificar el renderizado del campo objeto para asegurar que muestre el valor correcto
   return (
     <Card>
       <CardContent className="pt-6">
@@ -793,18 +785,19 @@ export function ExpedienteForm({
                       // Asegurarnos de que el valor del objeto se muestre correctamente
                       console.log("Renderizando campo objeto con valor:", field.value)
 
+                      // Asegurar que siempre haya un valor válido
+                      const currentValue = field.value || OBJETOS_DISPONIBLES[0].value
+
                       return (
                         <FormItem>
                           <FormLabel>
                             Objeto <span className="text-destructive">*</span>
                           </FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
+                          <Select value={currentValue} onValueChange={field.onChange} defaultValue={currentValue}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue>
-                                  {field.value
-                                    ? OBJETOS_DISPONIBLES.find((obj) => obj.value === field.value)?.label || field.value
-                                    : "Seleccionar objeto"}
+                                  {OBJETOS_DISPONIBLES.find((obj) => obj.value === currentValue)?.label || currentValue}
                                 </SelectValue>
                               </SelectTrigger>
                             </FormControl>
