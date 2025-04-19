@@ -696,10 +696,38 @@ export function ExpedienteForm({
                     <h3 className="text-lg font-medium">Personas vinculadas</h3>
                     <p className="text-sm text-muted-foreground">Agregue las personas relacionadas con el expediente</p>
                   </div>
-                  <Button type="button" onClick={addPersona} variant="outline">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Agregar persona
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={addPersona} variant="outline">
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Agregar persona
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        // Agregar una aseguradora como persona
+                        const newPersona = { id: "", rol: "Aseguradora" }
+                        const updatedPersonas = [...personasArray, newPersona]
+                        setPersonasArray(updatedPersonas)
+
+                        // Actualizar explícitamente el campo personas en el formulario
+                        form.setValue("personas", updatedPersonas, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                          shouldTouch: true,
+                        })
+
+                        // Cambiar a la pestaña de personas si no está activa
+                        if (activeTab !== "personas") {
+                          setActiveTab("personas")
+                        }
+                      }}
+                      variant="outline"
+                      className="bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300"
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4 text-blue-600" />
+                      Agregar aseguradora
+                    </Button>
+                  </div>
                 </div>
 
                 {personasArray.length === 0 && (
