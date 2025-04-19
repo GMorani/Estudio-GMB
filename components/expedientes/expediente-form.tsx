@@ -163,6 +163,21 @@ export function ExpedienteForm({
     defaultValues: getDefaultValues(),
   })
 
+  // Inicializar el objeto cuando se carga el expediente
+  useEffect(() => {
+    if (expediente && expediente.objeto) {
+      console.log("Inicializando objeto del expediente:", expediente.objeto)
+      // Forzar la actualización del valor del objeto en el formulario
+      setTimeout(() => {
+        form.setValue("objeto", expediente.objeto, {
+          shouldValidate: true,
+          shouldDirty: false,
+          shouldTouch: false,
+        })
+      }, 100) // Pequeño retraso para asegurar que el formulario esté listo
+    }
+  }, [expediente, form])
+
   // Extraer estados de manera segura del expediente (solo una vez al inicio)
   useEffect(() => {
     try {
@@ -595,7 +610,14 @@ export function ExpedienteForm({
           : "El expediente ha sido creado correctamente",
       })
 
-      router.push("/expedientes")
+      // Redirigir a la página del expediente específico si estamos editando
+      // o a la lista de expedientes si estamos creando uno nuevo
+      if (expediente && expediente.id) {
+        router.push(`/expedientes/${expediente.id}`)
+      } else {
+        router.push("/expedientes")
+      }
+
       router.refresh()
     } catch (error) {
       console.error("Error al guardar expediente:", error)
@@ -767,29 +789,38 @@ export function ExpedienteForm({
                   <FormField
                     control={form.control}
                     name="objeto"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          Objeto <span className="text-destructive">*</span>
-                        </FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar objeto" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {OBJETOS_DISPONIBLES.map((objeto) => (
-                              <SelectItem key={objeto.value} value={objeto.value}>
-                                {objeto.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription>Este campo es obligatorio</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      // Asegurarnos de que el valor del objeto se muestre correctamente
+                      console.log("Renderizando campo objeto con valor:", field.value)
+
+                      return (
+                        <FormItem>
+                          <FormLabel>
+                            Objeto <span className="text-destructive">*</span>
+                          </FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {field.value
+                                    ? OBJETOS_DISPONIBLES.find((obj) => obj.value === field.value)?.label || field.value
+                                    : "Seleccionar objeto"}
+                                </SelectValue>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {OBJETOS_DISPONIBLES.map((objeto) => (
+                                <SelectItem key={objeto.value} value={objeto.value}>
+                                  {objeto.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>Este campo es obligatorio</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )
+                    }}
                   />
 
                   {/* Autos (generado automáticamente) */}
@@ -1029,7 +1060,13 @@ export function ExpedienteForm({
             </Tabs>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => router.push("/expedientes")}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  expediente ? router.push(`/expedientes/${expediente.id}`) : router.push("/expedientes")
+                }
+              >
                 Cancelar
               </Button>
               <Button type="submit" disabled={isSubmitting}>
