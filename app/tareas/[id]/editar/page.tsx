@@ -7,57 +7,48 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ArrowLeft } from "lucide-react"
-import { ExpedienteForm } from "@/components/expedientes/expediente-form"
+import { TareaForm } from "@/components/tareas/tarea-form"
 
-export default function EditarExpedientePage({ params }: { params: { id: string } }) {
+export default function EditarTareaPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const supabase = createClientComponentClient()
-  const [expediente, setExpediente] = useState<any>(null)
+  const [tarea, setTarea] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    async function fetchExpediente() {
+    async function fetchTarea() {
       setLoading(true)
       setError(null)
 
       try {
         const { data, error: fetchError } = await supabase
-          .from("expedientes")
+          .from("tareas_expediente")
           .select(`
             id,
-            numero,
-            fecha_inicio,
-            fecha_fin,
-            monto_total,
             descripcion,
-            juzgado_id,
-            expediente_personas (
-              id,
-              rol,
-              persona_id
-            ),
-            expediente_estados (
-              id,
-              estado_id,
-              fecha
-            )
+            fecha_vencimiento,
+            fecha_creacion,
+            prioridad,
+            cumplida,
+            notas,
+            expediente_id
           `)
           .eq("id", params.id)
           .single()
 
         if (fetchError) throw fetchError
 
-        setExpediente(data)
+        setTarea(data)
       } catch (err: any) {
-        console.error("Error al cargar expediente:", err)
-        setError(err.message || "Error al cargar el expediente")
+        console.error("Error al cargar tarea:", err)
+        setError(err.message || "Error al cargar la tarea")
       } finally {
         setLoading(false)
       }
     }
 
-    fetchExpediente()
+    fetchTarea()
   }, [supabase, params.id])
 
   if (loading) {
@@ -83,21 +74,21 @@ export default function EditarExpedientePage({ params }: { params: { id: string 
   if (error) {
     return (
       <div className="rounded-md bg-destructive/10 p-8 text-center text-destructive">
-        <h2 className="text-xl font-semibold mb-2">Error al cargar el expediente</h2>
+        <h2 className="text-xl font-semibold mb-2">Error al cargar la tarea</h2>
         <p>{error}</p>
-        <Button className="mt-4" onClick={() => router.push("/expedientes")}>
-          Volver a expedientes
+        <Button className="mt-4" onClick={() => router.push("/tareas")}>
+          Volver a tareas
         </Button>
       </div>
     )
   }
 
-  if (!expediente) {
+  if (!tarea) {
     return (
       <div className="rounded-md border p-8 text-center">
-        <h2 className="text-xl font-semibold mb-2">Expediente no encontrado</h2>
-        <p className="text-muted-foreground mb-4">El expediente solicitado no existe o ha sido eliminado.</p>
-        <Button onClick={() => router.push("/expedientes")}>Volver a expedientes</Button>
+        <h2 className="text-xl font-semibold mb-2">Tarea no encontrada</h2>
+        <p className="text-muted-foreground mb-4">La tarea solicitada no existe o ha sido eliminada.</p>
+        <Button onClick={() => router.push("/tareas")}>Volver a tareas</Button>
       </div>
     )
   }
@@ -108,20 +99,16 @@ export default function EditarExpedientePage({ params }: { params: { id: string 
         <Button variant="outline" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <h1 className="text-3xl font-bold">Editar Expediente</h1>
+        <h1 className="text-3xl font-bold">Editar Tarea</h1>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Formulario de edición</CardTitle>
-          <CardDescription>Actualiza la información del expediente {expediente.numero}</CardDescription>
+          <CardDescription>Actualiza la información de la tarea</CardDescription>
         </CardHeader>
         <CardContent>
-          <ExpedienteForm
-            expedienteId={params.id}
-            initialData={expediente}
-            onSuccess={() => router.push(`/expedientes/${params.id}`)}
-          />
+          <TareaForm tareaId={params.id} initialData={tarea} onSuccess={() => router.push(`/tareas/${params.id}`)} />
         </CardContent>
       </Card>
     </div>

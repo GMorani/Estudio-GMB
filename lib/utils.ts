@@ -1,56 +1,58 @@
-import { type ClassValue, clsx } from "clsx"
+import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Función simple para formatear fechas
-export function formatDate(date: string | Date | null | undefined): string {
-  if (!date) return "-"
-  try {
-    const dateObj = typeof date === "string" ? new Date(date) : date
-    return dateObj.toLocaleDateString("es-AR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    })
-  } catch (error) {
-    return "-"
+export function formatDNI(dni: string | undefined): string {
+  if (!dni) return ""
+  const cleanedDNI = dni.replace(/\D/g, "")
+
+  if (cleanedDNI.length <= 2) {
+    return cleanedDNI
+  } else if (cleanedDNI.length <= 8) {
+    return cleanedDNI.replace(/(\d{2})(\d*)/, "$1.$2")
+  } else {
+    return cleanedDNI.replace(/(\d{2})(\d{3})(\d{3})/, "$1.$2.$3")
   }
 }
 
-// Función simple para formatear DNI
-export function formatDNI(dni: string | null | undefined): string {
-  if (!dni) return "-"
-  return dni.toString()
+export function formatTelefono(telefono: string | undefined): string {
+  if (!telefono) return ""
+  const cleanedTelefono = telefono.replace(/\D/g, "")
+
+  if (cleanedTelefono.length <= 3) {
+    return cleanedTelefono
+  } else if (cleanedTelefono.length <= 6) {
+    return cleanedTelefono.replace(/(\d{3})(\d*)/, "$1-$2")
+  } else if (cleanedTelefono.length <= 10) {
+    return cleanedTelefono.replace(/(\d{3})(\d{3})(\d*)/, "$1-$2-$3")
+  } else {
+    return cleanedTelefono.replace(/(\d{3})(\d{4})(\d*)/, "$1-$2-$3")
+  }
 }
 
-// Función simple para formatear teléfono
-export function formatTelefono(telefono: string | null | undefined): string {
-  if (!telefono) return "-"
-  return telefono.toString()
+export function formatDate(dateString: string | undefined): string {
+  if (!dateString) return "-"
+
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return "-" // Invalid date
+    }
+    return date.toLocaleDateString("es-AR")
+  } catch (error) {
+    return "-" // Handle invalid date strings
+  }
 }
 
-// Función simple para formatear moneda
 export function formatCurrency(amount: number | null | undefined): string {
-  if (amount === null || amount === undefined) return "-"
+  if (amount === null || amount === undefined) {
+    return "-"
+  }
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
   }).format(amount)
-}
-
-// Función para crear URLs con parámetros de consulta
-export function createUrl(pathname: string, params: Record<string, string | number | undefined | null>) {
-  const url = new URL(pathname, window.location.origin)
-
-  // Filtrar parámetros nulos o indefinidos
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.append(key, String(value))
-    }
-  })
-
-  return url.toString()
 }

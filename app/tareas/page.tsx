@@ -1,134 +1,72 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PlusCircle, CheckSquare, Clock, Calendar } from "lucide-react"
 import { ExpedientesTareasPendientes } from "@/components/tareas/expedientes-tareas-pendientes"
 
-export const dynamic = "force-dynamic"
-export const revalidate = 0
+export default function TareasPage() {
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState("pendientes")
 
-export default async function TareasPage() {
-  const supabase = createServerComponentClient({ cookies })
-
-  try {
-    // Obtener expedientes con tareas pendientes
-    const { data: expedientesConTareas, error } = await supabase
-      .from("tareas_expediente")
-      .select(`
-        id,
-        descripcion,
-        fecha_vencimiento,
-        cumplida,
-        expediente_id,
-        expedientes (
-          id,
-          numero,
-          autos,
-          fecha_inicio,
-          expediente_estados (
-            estados_expediente (
-              id,
-              nombre,
-              color
-            )
-          ),
-          expediente_personas (
-            personas (
-              id,
-              nombre
-            )
-          )
-        )
-      `)
-      .eq("cumplida", false)
-      .order("fecha_vencimiento", { ascending: true })
-
-    if (error) {
-      console.error("Error al cargar tareas:", error)
-      throw error
-    }
-
-    // Transformar los datos para agruparlos por expediente
-    const expedientesMap = new Map()
-
-    expedientesConTareas?.forEach((tarea) => {
-      const expedienteId = tarea.expediente_id
-      const expediente = tarea.expedientes
-
-      if (!expedientesMap.has(expedienteId)) {
-        // Obtener el estado actual (el último en la lista)
-        const estados = expediente.expediente_estados || []
-        const estadoActual = estados.length > 0 ? estados[estados.length - 1].estados_expediente : null
-
-        // Obtener la primera persona asociada (generalmente el cliente principal)
-        const personas = expediente.expediente_personas || []
-        const personaPrincipal = personas.length > 0 ? personas[0].personas : null
-
-        expedientesMap.set(expedienteId, {
-          id: expediente.id,
-          numero: expediente.numero,
-          autos: expediente.autos,
-          fecha_inicio: expediente.fecha_inicio,
-          estado: estadoActual,
-          persona: personaPrincipal,
-          tareas: [],
-          proximaTarea: null,
-        })
-      }
-
-      // Añadir la tarea al expediente
-      const expedienteData = expedientesMap.get(expedienteId)
-      expedienteData.tareas.push({
-        id: tarea.id,
-        descripcion: tarea.descripcion,
-        fecha_vencimiento: tarea.fecha_vencimiento,
-        cumplida: tarea.cumplida,
-      })
-
-      // Actualizar la próxima tarea si es necesario
-      if (
-        !expedienteData.proximaTarea ||
-        new Date(tarea.fecha_vencimiento) < new Date(expedienteData.proximaTarea.fecha_vencimiento)
-      ) {
-        expedienteData.proximaTarea = {
-          id: tarea.id,
-          descripcion: tarea.descripcion,
-          fecha_vencimiento: tarea.fecha_vencimiento,
-        }
-      }
-    })
-
-    // Convertir el Map a un array y ordenar por la fecha de la próxima tarea
-    const expedientes = Array.from(expedientesMap.values()).sort((a, b) => {
-      if (!a.proximaTarea) return 1
-      if (!b.proximaTarea) return -1
-      return new Date(a.proximaTarea.fecha_vencimiento).getTime() - new Date(b.proximaTarea.fecha_vencimiento).getTime()
-    })
-
-    return (
-      <div className="space-y-6">
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tareas Pendientes</h1>
-          <p className="text-muted-foreground">
-            Expedientes con tareas pendientes, ordenados por fecha de vencimiento más próxima.
-          </p>
+          <h1 className="text-3xl font-bold">Tareas</h1>
+          <p className="text-muted-foreground">Gestiona las tareas de todos los expedientes</p>
         </div>
+        <Button onClick={() => router.push("/tareas/nueva")}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Nueva Tarea
+        </Button>
+      </div>
 
-        <ExpedientesTareasPendientes expedientes={expedientes} />
-      </div>
-    )
-  } catch (error) {
-    console.error("Error en TareasPage:", error)
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tareas Pendientes</h1>
-          <p className="text-muted-foreground">
-            Expedientes con tareas pendientes, ordenados por fecha de vencimiento más próxima.
-          </p>
-        </div>
-        <div className="rounded-md bg-destructive/10 p-4">
-          <p className="text-destructive">Error al cargar las tareas. Por favor, intente nuevamente.</p>
-        </div>
-      </div>
-    )
-  }
+      <Tabs defaultValue="pendientes" onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="pendientes">
+            <CheckSquare className="mr-2 h-4 w-4" />
+            Pendientes
+          </TabsTrigger>
+          <TabsTrigger value="vencidas">
+            <Clock className="mr-2 h-4 w-4" />
+            Vencidas
+          </TabsTrigger>
+          <TabsTrigger value="calendario">
+            <Calendar className="mr-2 h-4 w-4" />
+            Calendario
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pendientes" className="mt-4">
+          <ExpedientesTareasPendientes vencidas={false} />
+        </TabsContent>
+
+        <TabsContent value="vencidas" className="mt-4">
+          <ExpedientesTareasPendientes vencidas={true} />
+        </TabsContent>
+
+        <TabsContent value="calendario" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Calendario de tareas</CardTitle>
+              <CardDescription>Visualiza las tareas en un calendario</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="text-center py-8">
+                <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium">Funcionalidad en desarrollo</h3>
+                <p className="text-muted-foreground">
+                  La visualización de tareas en calendario estará disponible próximamente.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
 }

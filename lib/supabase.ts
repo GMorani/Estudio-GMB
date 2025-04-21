@@ -1,31 +1,15 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import type { Database } from "@/types/supabase"
 
-// Crear un cliente de Supabase para el lado del cliente
-export const createClientSupabase = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+// Implementación de patrón singleton para el cliente de Supabase en el lado del cliente
+let supabaseInstance: ReturnType<typeof createClientComponentClient<Database>> | null = null
 
-  return createClient(supabaseUrl, supabaseAnonKey)
-}
-
-// Crear un cliente de Supabase para el lado del servidor
-export const createServerSupabase = () => {
-  const supabaseUrl = process.env.SUPABASE_URL as string
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string
-
-  return createClient(supabaseUrl, supabaseServiceKey)
-}
-
-// Cliente de Supabase para uso en el lado del cliente (singleton)
-let supabaseInstance: ReturnType<typeof createClient> | null = null
-
-export const supabase = () => {
+export function getSupabaseClient() {
   if (!supabaseInstance) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
-
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey)
+    supabaseInstance = createClientComponentClient<Database>()
   }
-
   return supabaseInstance
 }
+
+// Exportar el cliente de Supabase como una exportación nombrada
+export const supabase = getSupabaseClient()
