@@ -1,16 +1,18 @@
-"\"use client"
+"use client"
+
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Esquema de validación
 const expedienteSchema = z.object({
@@ -34,28 +36,24 @@ type ExpedienteFormValues = z.infer<typeof expedienteSchema>
 
 type ExpedienteFormProps = {
   expediente?: any
-  juzgados: { id: string; nombre: string }[]
-  estados: { id: string; nombre: string; color: string }[]
-  clientes: { id: string; nombre: string }[]
-  abogados: { id: string; nombre: string }[]
-  aseguradoras: { id: string; nombre: string }[]
-  mediadores: { id: string; nombre: string }[]
-  peritos: { id: string; nombre: string }[]
+  onSuccess?: (id: string) => void
 }
 
-export function ExpedienteForm({
-  expediente,
-  juzgados,
-  estados,
-  clientes,
-  abogados,
-  aseguradoras,
-  mediadores,
-  peritos,
-}: ExpedienteFormProps) {
+export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    juzgados: [] as any[],
+    estados: [] as any[],
+    clientes: [] as any[],
+    abogados: [] as any[],
+    aseguradoras: [] as any[],
+    mediadores: [] as any[],
+    peritos: [] as any[],
+  })
 
   // Valores por defecto
   const defaultValues: Partial<ExpedienteFormValues> = expediente
@@ -99,6 +97,12 @@ export function ExpedienteForm({
         juzgado_id: "",
         objeto: "",
         autos: "",
+        estados: [],
+        clientes: [],
+        abogados: [],
+        aseguradoras: [],
+        mediadores: [],
+        peritos: [],
       }
 
   const form = useForm<ExpedienteFormValues>({
@@ -106,8 +110,102 @@ export function ExpedienteForm({
     defaultValues,
   })
 
+  // Cargar datos necesarios para el formulario
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true)
+
+        // Obtener juzgados
+        const { data: juzgados, error: juzgadosError } = await supabase
+          .from("personas")
+          .select("id, nombre")
+          .eq("tipo_id", 4) // Tipo juzgado
+          .order("nombre")
+
+        if (juzgadosError) throw juzgadosError
+
+        // Obtener estados
+        const { data: estados, error: estadosError } = await supabase
+          .from("estados_expediente")
+          .select("id, nombre, color")
+          .order("nombre")
+
+        if (estadosError) throw estadosError
+
+        // Obtener clientes
+        const { data: clientes, error: clientesError } = await supabase
+          .from("personas")
+          .select("id, nombre")
+          .eq("tipo_id", 1) // Tipo cliente
+          .order("nombre")
+
+        if (clientesError) throw clientesError
+
+        // Obtener abogados
+        const { data: abogados, error: abogadosError } = await supabase
+          .from("personas")
+          .select("id, nombre")
+          .eq("tipo_id", 2) // Tipo abogado
+          .order("nombre")
+
+        if (abogadosError) throw abogadosError
+
+        // Obtener aseguradoras
+        const { data: aseguradoras, error: aseguradorasError } = await supabase
+          .from("personas")
+          .select("id, nombre")
+          .eq("tipo_id", 3) // Tipo aseguradora
+          .order("nombre")
+
+        if (aseguradorasError) throw aseguradorasError
+
+        // Obtener mediadores
+        const { data: mediadores, error: mediadoresError } = await supabase
+          .from("personas")
+          .select("id, nombre")
+          .eq("tipo_id", 5) // Tipo mediador
+          .order("nombre")
+
+        if (mediadoresError) throw mediadoresError
+
+        // Obtener peritos
+        const { data: peritos, error: peritosError } = await supabase
+          .from("personas")
+          .select("id, nombre")
+          .eq("tipo_id", 6) // Tipo perito
+          .order("nombre")
+
+        if (peritosError) throw peritosError
+
+        setFormData({
+          juzgados: juzgados || [],
+          estados: estados || [],
+          clientes: clientes || [],
+          abogados: abogados || [],
+          aseguradoras: aseguradoras || [],
+          mediadores: mediadores || [],
+          peritos: peritos || [],
+        })
+      } catch (error) {
+        console.error("Error al cargar datos:", error)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los datos necesarios para el formulario",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [supabase, toast])
+
   async function onSubmit(data: ExpedienteFormValues) {
     try {
+      setIsSubmitting(true)
+
       // 1. Crear o actualizar en la tabla expedientes
       const expedienteData = {
         numero: data.numero,
@@ -204,8 +302,12 @@ export function ExpedienteForm({
           : "El expediente ha sido creado correctamente",
       })
 
-      router.push("/expedientes")
-      router.refresh()
+      if (onSuccess) {
+        onSuccess(expedienteId)
+      } else {
+        router.push("/expedientes")
+        router.refresh()
+      }
     } catch (error) {
       console.error("Error al guardar expediente:", error)
       toast({
@@ -213,312 +315,325 @@ export function ExpedienteForm({
         description: "Ocurrió un error al guardar el expediente",
         variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    )
+  }
+
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Número */}
-              <FormField
-                control={form.control}
-                name="numero"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Número</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Número */}
+          <FormField
+            control={form.control}
+            name="numero"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Número</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Número Judicial */}
-              <FormField
-                control={form.control}
-                name="numero_judicial"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Número Judicial</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Número Judicial */}
+          <FormField
+            control={form.control}
+            name="numero_judicial"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Número Judicial</FormLabel>
+                <FormControl>
+                  <Input {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Fecha Inicio */}
-              <FormField
-                control={form.control}
-                name="fecha_inicio"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha Inicio</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Fecha Inicio */}
+          <FormField
+            control={form.control}
+            name="fecha_inicio"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Fecha Inicio</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Fecha Inicio Judicial */}
-              <FormField
-                control={form.control}
-                name="fecha_inicio_judicial"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Fecha Inicio Judicial</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Fecha Inicio Judicial */}
+          <FormField
+            control={form.control}
+            name="fecha_inicio_judicial"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Fecha Inicio Judicial</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Monto Total */}
-              <FormField
-                control={form.control}
-                name="monto_total"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Monto Total</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Monto Total */}
+          <FormField
+            control={form.control}
+            name="monto_total"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Monto Total</FormLabel>
+                <FormControl>
+                  <Input type="number" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Juzgado */}
-              <FormField
-                control={form.control}
-                name="juzgado_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Juzgado</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar juzgado" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {juzgados.map((juzgado) => (
-                          <SelectItem key={juzgado.id} value={juzgado.id}>
-                            {juzgado.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Juzgado */}
+          <FormField
+            control={form.control}
+            name="juzgado_id"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Juzgado</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar juzgado" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {formData.juzgados.map((juzgado) => (
+                      <SelectItem key={juzgado.id} value={juzgado.id}>
+                        {juzgado.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Objeto */}
-              <FormField
-                control={form.control}
-                name="objeto"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Objeto</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} rows={2} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Objeto */}
+          <FormField
+            control={form.control}
+            name="objeto"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Objeto</FormLabel>
+                <FormControl>
+                  <Textarea {...field} rows={2} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Autos */}
-              <FormField
-                control={form.control}
-                name="autos"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Autos</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} rows={2} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Autos */}
+          <FormField
+            control={form.control}
+            name="autos"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Autos</FormLabel>
+                <FormControl>
+                  <Textarea {...field} rows={2} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Estados */}
-              <FormField
-                control={form.control}
-                name="estados"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Estados</FormLabel>
-                    <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar estados" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {estados.map((estado) => (
-                          <SelectItem key={estado.id} value={estado.id}>
-                            {estado.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Estados */}
+          <FormField
+            control={form.control}
+            name="estados"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Estados</FormLabel>
+                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar estados" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {formData.estados.map((estado) => (
+                      <SelectItem key={estado.id} value={estado.id}>
+                        {estado.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Clientes */}
-              <FormField
-                control={form.control}
-                name="clientes"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Clientes</FormLabel>
-                    <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar clientes" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {clientes.map((cliente) => (
-                          <SelectItem key={cliente.id} value={cliente.id}>
-                            {cliente.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Clientes */}
+          <FormField
+            control={form.control}
+            name="clientes"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Clientes</FormLabel>
+                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar clientes" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {formData.clientes.map((cliente) => (
+                      <SelectItem key={cliente.id} value={cliente.id}>
+                        {cliente.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Abogados */}
-              <FormField
-                control={form.control}
-                name="abogados"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Abogados</FormLabel>
-                    <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar abogados" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {abogados.map((abogado) => (
-                          <SelectItem key={abogado.id} value={abogado.id}>
-                            {abogado.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Abogados */}
+          <FormField
+            control={form.control}
+            name="abogados"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Abogados</FormLabel>
+                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar abogados" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {formData.abogados.map((abogado) => (
+                      <SelectItem key={abogado.id} value={abogado.id}>
+                        {abogado.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Aseguradoras */}
-              <FormField
-                control={form.control}
-                name="aseguradoras"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Aseguradoras</FormLabel>
-                    <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar aseguradoras" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {aseguradoras.map((aseguradora) => (
-                          <SelectItem key={aseguradora.id} value={aseguradora.id}>
-                            {aseguradora.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Aseguradoras */}
+          <FormField
+            control={form.control}
+            name="aseguradoras"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Aseguradoras</FormLabel>
+                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar aseguradoras" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {formData.aseguradoras.map((aseguradora) => (
+                      <SelectItem key={aseguradora.id} value={aseguradora.id}>
+                        {aseguradora.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Mediadores */}
-              <FormField
-                control={form.control}
-                name="mediadores"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Mediadores</FormLabel>
-                    <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar mediadores" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {mediadores.map((mediador) => (
-                          <SelectItem key={mediador.id} value={mediador.id}>
-                            {mediador.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Mediadores */}
+          <FormField
+            control={form.control}
+            name="mediadores"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Mediadores</FormLabel>
+                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar mediadores" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {formData.mediadores.map((mediador) => (
+                      <SelectItem key={mediador.id} value={mediador.id}>
+                        {mediador.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              {/* Peritos */}
-              <FormField
-                control={form.control}
-                name="peritos"
-                render={({ field }) => (
-                  <FormItem className="md:col-span-2">
-                    <FormLabel>Peritos</FormLabel>
-                    <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar peritos" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {peritos.map((perito) => (
-                          <SelectItem key={perito.id} value={perito.id}>
-                            {perito.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+          {/* Peritos */}
+          <FormField
+            control={form.control}
+            name="peritos"
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel>Peritos</FormLabel>
+                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar peritos" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {formData.peritos.map((perito) => (
+                      <SelectItem key={perito.id} value={perito.id}>
+                        {perito.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => router.push("/expedientes")}>
-                Cancelar
-              </Button>
-              <Button type="submit">{expediente ? "Actualizar" : "Guardar"}</Button>
-            </div>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => router.push("/expedientes")} disabled={isSubmitting}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Guardando..." : expediente ? "Actualizar" : "Guardar"}
+          </Button>
+        </div>
+      </form>
+    </Form>
   )
 }
