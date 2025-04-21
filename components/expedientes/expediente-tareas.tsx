@@ -1,16 +1,14 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/components/ui/date-picker"
-import { useToast } from "@/components/ui/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
 import { formatDate } from "@/lib/utils"
-import { PlusCircle, Loader2, CheckCircle } from "lucide-react"
+import { Loader2, PlusCircle, CheckCircle, AlertCircle } from "lucide-react"
 
 type Tarea = {
   id: number
@@ -19,100 +17,65 @@ type Tarea = {
   cumplida: boolean
 }
 
-type ExpedienteTareasProps = {
+export function ExpedienteTareas({
+  expedienteId,
+  onTareaCompletada,
+}: {
   expedienteId: string
-  tareas: Tarea[]
-  onTareaCompletada?: (nuevaActividad: { id: number; descripcion: string; fecha: string; automatica: boolean }) => void
-}
-
-export function ExpedienteTareas({ expedienteId, tareas, onTareaCompletada }: ExpedienteTareasProps) {
-  const router = useRouter()
-  const { toast } = useToast()
+  onTareaCompletada?: (actividad: any) => void
+}) {
+  const [tareas, setTareas] = useState<Tarea[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [nuevaTarea, setNuevaTarea] = useState("")
+  const [fechaVencimiento, setFechaVencimiento] = useState<Date | undefined>(undefined)
+  const [mostrarFormulario, setMostrarFormulario] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+  const [completando, setCompletando] = useState<number | null>(null)
   const supabase = createClientComponentClient()
-  const [tareasState, setTareasState] = useState<Tarea[]>(tareas)
-  const [isLoading, setIsLoading] = useState<Record<number, boolean>>({})
-  const [isCreating, setIsCreating] = useState(false)
-  const [nuevaTarea, setNuevaTarea] = useState({
-    descripcion: "",
-    fecha_vencimiento: new Date(),
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Función para marcar una tarea como completada
-  const completarTarea = async (tareaId: number, descripcion: string) => {
-    try {
-      setIsLoading((prev) => ({ ...prev, [tareaId]: true }))
+  // Cargar tareas
+  useEffect(() => {
+    const cargarTareas = async () => {
+      try {
+        setLoading(true)
+        const { data, error } = await supabase
+          .from("tareas_expediente")
+          .select("*")
+          .eq("expediente_id", expedienteId)
+          .eq("cumplida", false)
+          .order("fecha_vencimiento", { ascending: true })
 
-      // 1. Actualizar la tarea a cumplida
-      const { error: updateError } = await supabase
-        .from("tareas_expediente")
-        .update({ cumplida: true })
-        .eq("id", tareaId)
-
-      if (updateError) throw updateError
-
-      // 2. Registrar la actividad
-      const actividadDescripcion = `Tarea cumplida - ${descripcion}`
-      const fechaActual = new Date().toISOString()
-
-      const { data: actividadData, error: actividadError } = await supabase
-        .from("actividades_expediente")
-        .insert({
-          expediente_id: expedienteId,
-          descripcion: actividadDescripcion,
-          fecha: fechaActual,
-          automatica: true,
-        })
-        .select()
-        .single()
-
-      if (actividadError) throw actividadError
-
-      // 3. Actualizar el estado local
-      setTareasState((prevTareas) => prevTareas.filter((tarea) => tarea.id !== tareaId))
-
-      // 4. Notificar al componente de actividades sobre la nueva actividad
-      if (onTareaCompletada && actividadData) {
-        onTareaCompletada(actividadData)
+        if (error) throw error
+        setTareas(data || [])
+      } catch (error: any) {
+        console.error("Error al cargar tareas:", error)
+        setError("Error al cargar las tareas. Por favor, intente nuevamente.")
+      } finally {
+        setLoading(false)
       }
-
-      toast({
-        title: "Tarea completada",
-        description: "La tarea ha sido marcada como completada.",
-      })
-    } catch (error) {
-      console.error("Error al completar tarea:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo completar la tarea. Intente nuevamente.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading((prev) => ({ ...prev, [tareaId]: false }))
-      router.refresh()
     }
-  }
 
-  // Función para crear una nueva tarea
-  const crearTarea = async () => {
-    if (!nuevaTarea.descripcion.trim()) {
-      toast({
-        title: "Error",
-        description: "La descripción de la tarea es obligatoria.",
-        variant: "destructive",
-      })
+    cargarTareas()
+  }, [expedienteId, supabase])
+
+  // Agregar nueva tarea
+  const agregarTarea = async () => {
+    if (!nuevaTarea.trim() || !fechaVencimiento) {
+      setError("Por favor, ingrese una descripción y fecha de vencimiento.")
       return
     }
 
     try {
-      setIsSubmitting(true)
+      setEnviando(true)
+      setError(null)
 
-      const { data, error } = await supabase
+      const { data: tareaNueva, error } = await supabase
         .from("tareas_expediente")
         .insert({
           expediente_id: expedienteId,
-          descripcion: nuevaTarea.descripcion,
-          fecha_vencimiento: nuevaTarea.fecha_vencimiento.toISOString(),
+          descripcion: nuevaTarea.trim(),
+          fecha_vencimiento: fechaVencimiento.toISOString(),
           cumplida: false,
         })
         .select()
@@ -120,145 +83,205 @@ export function ExpedienteTareas({ expedienteId, tareas, onTareaCompletada }: Ex
 
       if (error) throw error
 
-      // Actualizar el estado local
-      setTareasState((prevTareas) => [...prevTareas, data])
-
-      // Registrar la actividad
-      const actividadDescripcion = `Nueva tarea creada - ${nuevaTarea.descripcion}`
-      const fechaActual = new Date().toISOString()
-
-      const { data: actividadData, error: actividadError } = await supabase
+      // Registrar actividad
+      const { data: actividad, error: errorActividad } = await supabase
         .from("actividades_expediente")
         .insert({
           expediente_id: expedienteId,
-          descripcion: actividadDescripcion,
-          fecha: fechaActual,
+          descripcion: `Nueva tarea: ${nuevaTarea.trim()}`,
+          fecha: new Date().toISOString(),
           automatica: true,
         })
         .select()
         .single()
 
-      if (actividadError) throw actividadError
+      if (errorActividad) throw errorActividad
 
-      // Notificar al componente de actividades sobre la nueva actividad
-      if (onTareaCompletada && actividadData) {
-        onTareaCompletada(actividadData)
+      // Actualizar estado local
+      setTareas((prevTareas) => [...prevTareas, tareaNueva])
+      setNuevaTarea("")
+      setFechaVencimiento(undefined)
+      setMostrarFormulario(false)
+
+      // Notificar al componente padre
+      if (onTareaCompletada && actividad) {
+        onTareaCompletada(actividad)
       }
-
-      // Limpiar el formulario
-      setNuevaTarea({
-        descripcion: "",
-        fecha_vencimiento: new Date(),
-      })
-      setIsCreating(false)
-
-      toast({
-        title: "Tarea creada",
-        description: "La tarea ha sido creada correctamente.",
-      })
-    } catch (error) {
-      console.error("Error al crear tarea:", error)
-      toast({
-        title: "Error",
-        description: "No se pudo crear la tarea. Intente nuevamente.",
-        variant: "destructive",
-      })
+    } catch (error: any) {
+      console.error("Error al agregar tarea:", error)
+      setError("Error al agregar la tarea. Por favor, intente nuevamente.")
     } finally {
-      setIsSubmitting(false)
-      router.refresh()
+      setEnviando(false)
     }
+  }
+
+  // Completar tarea
+  const completarTarea = async (tareaId: number) => {
+    try {
+      setCompletando(tareaId)
+      setError(null)
+
+      // Obtener la descripción de la tarea
+      const tarea = tareas.find((t) => t.id === tareaId)
+      if (!tarea) throw new Error("Tarea no encontrada")
+
+      // Actualizar tarea
+      const { error } = await supabase.from("tareas_expediente").update({ cumplida: true }).eq("id", tareaId)
+
+      if (error) throw error
+
+      // Registrar actividad
+      const { data: actividad, error: errorActividad } = await supabase
+        .from("actividades_expediente")
+        .insert({
+          expediente_id: expedienteId,
+          descripcion: `Tarea cumplida: ${tarea.descripcion}`,
+          fecha: new Date().toISOString(),
+          automatica: true,
+        })
+        .select()
+        .single()
+
+      if (errorActividad) throw errorActividad
+
+      // Actualizar estado local
+      setTareas((prevTareas) => prevTareas.filter((t) => t.id !== tareaId))
+
+      // Notificar al componente padre
+      if (onTareaCompletada && actividad) {
+        onTareaCompletada(actividad)
+      }
+    } catch (error: any) {
+      console.error("Error al completar tarea:", error)
+      setError("Error al completar la tarea. Por favor, intente nuevamente.")
+    } finally {
+      setCompletando(null)
+    }
+  }
+
+  // Verificar si una tarea está vencida
+  const estaVencida = (fecha: string) => {
+    const fechaVencimiento = new Date(fecha)
+    const hoy = new Date()
+    return fechaVencimiento < hoy
   }
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Tareas Pendientes</CardTitle>
-        {!isCreating && (
-          <Button variant="outline" size="sm" onClick={() => setIsCreating(true)}>
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle>Tareas pendientes</CardTitle>
+            <CardDescription>Gestiona las tareas pendientes del expediente</CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMostrarFormulario(!mostrarFormulario)}
+            disabled={enviando}
+          >
             <PlusCircle className="h-4 w-4 mr-2" />
-            Nueva Tarea
+            Nueva tarea
           </Button>
-        )}
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {isCreating && (
-          <div className="border rounded-md p-4 space-y-4">
-            <h3 className="font-medium">Nueva Tarea</h3>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Descripción</label>
+      <CardContent>
+        {error && <div className="bg-destructive/10 text-destructive text-sm p-2 rounded-md mb-4">{error}</div>}
+
+        {mostrarFormulario && (
+          <div className="space-y-4 mb-6 p-4 border rounded-md bg-muted/30">
+            <div>
+              <label htmlFor="descripcion-tarea" className="block text-sm font-medium mb-1">
+                Descripción de la tarea
+              </label>
               <Input
-                value={nuevaTarea.descripcion}
-                onChange={(e) => setNuevaTarea({ ...nuevaTarea, descripcion: e.target.value })}
-                placeholder="Describir la tarea..."
+                id="descripcion-tarea"
+                value={nuevaTarea}
+                onChange={(e) => setNuevaTarea(e.target.value)}
+                placeholder="Describir la tarea a realizar"
+                disabled={enviando}
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Fecha de vencimiento</label>
-              <DatePicker
-                date={nuevaTarea.fecha_vencimiento}
-                setDate={(date) => setNuevaTarea({ ...nuevaTarea, fecha_vencimiento: date })}
-              />
+            <div>
+              <label className="block text-sm font-medium mb-1">Fecha de vencimiento</label>
+              <DatePicker date={fechaVencimiento} setDate={setFechaVencimiento} disabled={enviando} />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsCreating(false)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setMostrarFormulario(false)
+                  setNuevaTarea("")
+                  setFechaVencimiento(undefined)
+                  setError(null)
+                }}
+                disabled={enviando}
+              >
                 Cancelar
               </Button>
-              <Button onClick={crearTarea} disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Guardando...
-                  </>
-                ) : (
-                  "Guardar Tarea"
-                )}
+              <Button
+                variant="default"
+                size="sm"
+                onClick={agregarTarea}
+                disabled={enviando || !nuevaTarea.trim() || !fechaVencimiento}
+              >
+                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar tarea"}
               </Button>
             </div>
           </div>
         )}
 
-        {tareasState.length === 0 && !isCreating ? (
-          <div className="text-center py-6">
-            <p className="text-muted-foreground">No hay tareas pendientes para este expediente.</p>
-            <Button variant="link" onClick={() => setIsCreating(true)}>
-              Crear una nueva tarea
-            </Button>
+        {loading ? (
+          <div className="flex justify-center items-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : tareas.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <CheckCircle className="h-8 w-8 mx-auto mb-2 text-muted-foreground/70" />
+            <p>No hay tareas pendientes para este expediente.</p>
+            <p className="text-sm">Puedes agregar una nueva tarea usando el botón superior.</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {tareasState.map((tarea) => {
-              // Calcular si la tarea está vencida
-              const fechaVencimiento = new Date(tarea.fecha_vencimiento)
-              const hoy = new Date()
-              const vencida = fechaVencimiento < hoy && !tarea.cumplida
-
+            {tareas.map((tarea) => {
+              const vencida = estaVencida(tarea.fecha_vencimiento)
               return (
                 <div
                   key={tarea.id}
-                  className={`flex items-start gap-3 p-3 border rounded-md ${
-                    vencida ? "border-destructive/50 bg-destructive/5" : ""
+                  className={`p-3 border rounded-md flex items-start justify-between ${
+                    vencida ? "bg-destructive/5 border-destructive/20" : ""
                   }`}
                 >
-                  <Checkbox
-                    checked={tarea.cumplida}
-                    disabled={isLoading[tarea.id]}
-                    onCheckedChange={() => completarTarea(tarea.id, tarea.descripcion)}
-                    className="mt-1"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium">{tarea.descripcion}</p>
-                    <p className={`text-sm ${vencida ? "text-destructive" : "text-muted-foreground"}`}>
-                      Vencimiento: {formatDate(tarea.fecha_vencimiento)}
-                    </p>
+                  <div className="flex items-start gap-3 flex-1">
+                    <Checkbox
+                      checked={false}
+                      onCheckedChange={() => completarTarea(tarea.id)}
+                      disabled={completando === tarea.id}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium">{tarea.descripcion}</p>
+                      <div className="flex items-center mt-1">
+                        {vencida ? (
+                          <div className="flex items-center text-xs text-destructive">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Vencida: {formatDate(tarea.fecha_vencimiento)}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Vence: {formatDate(tarea.fecha_vencimiento)}</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <Button
                     variant="default"
                     size="sm"
-                    disabled={isLoading[tarea.id]}
-                    onClick={() => completarTarea(tarea.id, tarea.descripcion)}
+                    onClick={() => completarTarea(tarea.id)}
+                    disabled={completando === tarea.id}
                     className="bg-green-600 hover:bg-green-700 text-white"
                   >
-                    {isLoading[tarea.id] ? (
+                    {completando === tarea.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
