@@ -1,148 +1,207 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
-import Link from "next/link"
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { AlertCircle, ArrowRight, Clock, FileText, Users, Calendar, BarChart4 } from "lucide-react"
 
-// Marcar la página como dinámica
-export const dynamic = "force-dynamic"
-
-export default async function DiagnosticoPage() {
-  const supabase = createServerComponentClient({ cookies })
-
-  // Consultar todas las personas
-  const { data: personas, error: personasError } = await supabase.from("personas").select("*").order("nombre")
-
-  // Consultar específicamente los clientes
-  const { data: clientes, error: clientesError } = await supabase
-    .from("personas")
-    .select(`
-      id,
-      nombre,
-      dni_cuit,
-      tipo_id,
-      clientes (*)
-    `)
-    .eq("tipo_id", 1) // Tipo cliente
-    .order("nombre")
-
-  // Consultar los tipos de persona
-  const { data: tiposPersona, error: tiposError } = await supabase.from("tipos_persona").select("*")
-
-  // Contar expedientes
-  const { count: expedientesCount, error: expedientesError } = await supabase
-    .from("expedientes")
-    .select("*", { count: "exact", head: true })
+export default function DiagnosticoPage() {
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState("expedientes")
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold mb-4">Diagnóstico de Base de Datos</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Diagnóstico del Sistema</h1>
         <p className="text-muted-foreground">
-          Esta página muestra información directa de la base de datos para ayudar a diagnosticar problemas.
+          Herramientas de diagnóstico para identificar problemas y optimizar el uso del sistema.
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-4">
-        <Button asChild variant="outline">
-          <Link href="/diagnostico/expedientes">Ver Diagnóstico de Expedientes ({expedientesCount || 0})</Link>
-        </Button>
-      </div>
+      <Tabs defaultValue="expedientes" onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="expedientes">
+            <FileText className="mr-2 h-4 w-4" />
+            Expedientes
+          </TabsTrigger>
+          <TabsTrigger value="clientes">
+            <Users className="mr-2 h-4 w-4" />
+            Clientes
+          </TabsTrigger>
+          <TabsTrigger value="estadisticas">
+            <BarChart4 className="mr-2 h-4 w-4" />
+            Estadísticas
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Tipos de Persona</h2>
-        {tiposError ? (
-          <p className="text-red-500">Error al cargar tipos: {tiposError.message}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border rounded-md">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="px-4 py-2 text-left">ID</th>
-                  <th className="px-4 py-2 text-left">Nombre</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tiposPersona?.map((tipo) => (
-                  <tr key={tipo.id} className="border-t">
-                    <td className="px-4 py-2">{tipo.id}</td>
-                    <td className="px-4 py-2">{tipo.nombre}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+        <TabsContent value="expedientes" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Diagnóstico de Expedientes</CardTitle>
+              <CardDescription>Identifica expedientes que requieren atención o seguimiento.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Expedientes sin actividad</CardTitle>
+                  <CardDescription>Expedientes que no han tenido actividad en los últimos 30 días.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push("/diagnostico/expedientes?tab=sin-actividad")}
+                  >
+                    <Clock className="mr-2 h-4 w-4" />
+                    Ver expedientes sin actividad
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Clientes (tipo_id = 1)</h2>
-        {clientesError ? (
-          <p className="text-red-500">Error al cargar clientes: {clientesError.message}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border rounded-md">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="px-4 py-2 text-left">ID</th>
-                  <th className="px-4 py-2 text-left">Nombre</th>
-                  <th className="px-4 py-2 text-left">DNI/CUIT</th>
-                  <th className="px-4 py-2 text-left">Tipo ID</th>
-                  <th className="px-4 py-2 text-left">Registro en tabla clientes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {clientes?.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-2 text-center">
-                      No se encontraron clientes
-                    </td>
-                  </tr>
-                ) : (
-                  clientes?.map((cliente) => (
-                    <tr key={cliente.id} className="border-t">
-                      <td className="px-4 py-2">{cliente.id}</td>
-                      <td className="px-4 py-2">{cliente.nombre}</td>
-                      <td className="px-4 py-2">{cliente.dni_cuit}</td>
-                      <td className="px-4 py-2">{cliente.tipo_id}</td>
-                      <td className="px-4 py-2">{cliente.clientes ? "Sí" : "No"}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Expedientes sin tareas</CardTitle>
+                  <CardDescription>Expedientes que no tienen tareas pendientes asignadas.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push("/diagnostico/expedientes?tab=sin-tareas")}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Ver expedientes sin tareas
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Todas las Personas</h2>
-        {personasError ? (
-          <p className="text-red-500">Error al cargar personas: {personasError.message}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border rounded-md">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="px-4 py-2 text-left">ID</th>
-                  <th className="px-4 py-2 text-left">Nombre</th>
-                  <th className="px-4 py-2 text-left">DNI/CUIT</th>
-                  <th className="px-4 py-2 text-left">Tipo ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                {personas?.map((persona) => (
-                  <tr key={persona.id} className="border-t">
-                    <td className="px-4 py-2">{persona.id}</td>
-                    <td className="px-4 py-2">{persona.nombre}</td>
-                    <td className="px-4 py-2">{persona.dni_cuit}</td>
-                    <td className="px-4 py-2">{persona.tipo_id}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Tareas vencidas</CardTitle>
+                  <CardDescription>Expedientes con tareas pendientes vencidas.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push("/diagnostico/expedientes?tab=tareas-vencidas")}
+                  >
+                    <AlertCircle className="mr-2 h-4 w-4 text-destructive" />
+                    Ver tareas vencidas
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Sin cliente asignado</CardTitle>
+                  <CardDescription>Expedientes que no tienen ningún cliente asociado.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push("/diagnostico/expedientes?tab=sin-cliente")}
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    Ver expedientes sin cliente
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="clientes" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Diagnóstico de Clientes</CardTitle>
+              <CardDescription>Identifica clientes que requieren atención o seguimiento.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Clientes sin expedientes</CardTitle>
+                  <CardDescription>Clientes que no tienen expedientes asociados.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push("/diagnostico/clientes?tab=sin-expedientes")}
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Ver clientes sin expedientes
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Clientes inactivos</CardTitle>
+                  <CardDescription>Clientes sin actividad en los últimos 90 días.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push("/diagnostico/clientes?tab=inactivos")}
+                  >
+                    <Clock className="mr-2 h-4 w-4" />
+                    Ver clientes inactivos
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="estadisticas" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Estadísticas del Sistema</CardTitle>
+              <CardDescription>Métricas y estadísticas generales del sistema.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Estadísticas de expedientes</CardTitle>
+                  <CardDescription>Métricas sobre expedientes por estado, tipo y más.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button variant="outline" className="w-full" onClick={() => router.push("/estadisticas/expedientes")}>
+                    <BarChart4 className="mr-2 h-4 w-4" />
+                    Ver estadísticas de expedientes
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg">Calendario de actividades</CardTitle>
+                  <CardDescription>Visualización de tareas y actividades en calendario.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Button variant="outline" className="w-full" onClick={() => router.push("/calendario")}>
+                    <Calendar className="mr-2 h-4 w-4" />
+                    Ver calendario
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

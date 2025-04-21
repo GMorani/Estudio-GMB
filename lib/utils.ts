@@ -40,3 +40,17 @@ export function formatCurrency(amount: number | null | undefined): string {
     currency: "ARS",
   }).format(amount)
 }
+
+// Función para crear URLs con parámetros de consulta
+export function createUrl(pathname: string, params: Record<string, string | number | undefined | null>) {
+  const url = new URL(pathname, window.location.origin)
+
+  // Filtrar parámetros nulos o indefinidos
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.append(key, String(value))
+    }
+  })
+
+  return url.toString()
+}
