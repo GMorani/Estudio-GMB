@@ -15,25 +15,40 @@ export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
   onManualDateChange?: (date: Date) => void
 }
 
-function CustomCaption({ displayMonth, onMonthChange, ...props }: CaptionProps) {
-  const months = Array.from({ length: 12 }, (_, i) => new Date(displayMonth.getFullYear(), i, 1))
+function CustomCaption(props: CaptionProps) {
+  const { displayMonth, onMonthChange } = props
+  const months = React.useMemo(
+    () => Array.from({ length: 12 }, (_, i) => new Date(displayMonth.getFullYear(), i, 1)),
+    [displayMonth],
+  )
 
   // Generate a range of years (current year ± 10 years)
   const currentYear = displayMonth.getFullYear()
-  const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
+  const years = React.useMemo(() => Array.from({ length: 21 }, (_, i) => currentYear - 10 + i), [currentYear])
+
+  const handleMonthChange = React.useCallback(
+    (value: string) => {
+      const newDate = new Date(displayMonth)
+      newDate.setMonth(Number.parseInt(value))
+      onMonthChange(newDate)
+    },
+    [displayMonth, onMonthChange],
+  )
+
+  const handleYearChange = React.useCallback(
+    (value: string) => {
+      const newDate = new Date(displayMonth)
+      newDate.setFullYear(Number.parseInt(value))
+      onMonthChange(newDate)
+    },
+    [displayMonth, onMonthChange],
+  )
 
   return (
     <div className="flex justify-center items-center gap-1">
-      <Select
-        value={displayMonth.getMonth().toString()}
-        onValueChange={(value) => {
-          const newMonth = new Date(displayMonth)
-          newMonth.setMonth(Number.parseInt(value))
-          onMonthChange(newMonth)
-        }}
-      >
+      <Select value={displayMonth.getMonth().toString()} onValueChange={handleMonthChange}>
         <SelectTrigger className="h-8 w-[110px]">
-          <SelectValue placeholder="Mes" />
+          <SelectValue>{format(displayMonth, "MMMM", { locale: es })}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {months.map((month, index) => (
@@ -44,16 +59,9 @@ function CustomCaption({ displayMonth, onMonthChange, ...props }: CaptionProps) 
         </SelectContent>
       </Select>
 
-      <Select
-        value={displayMonth.getFullYear().toString()}
-        onValueChange={(value) => {
-          const newMonth = new Date(displayMonth)
-          newMonth.setFullYear(Number.parseInt(value))
-          onMonthChange(newMonth)
-        }}
-      >
+      <Select value={displayMonth.getFullYear().toString()} onValueChange={handleYearChange}>
         <SelectTrigger className="h-8 w-[90px]">
-          <SelectValue placeholder="Año" />
+          <SelectValue>{displayMonth.getFullYear()}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {years.map((year) => (
