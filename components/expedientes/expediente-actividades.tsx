@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import { formatDate } from "@/lib/utils"
-import { PlusCircle, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { PlusCircle, Loader2, ChevronDown, ChevronUp, Edit, Trash2, Save, X } from "lucide-react"
 
 type Actividad = {
   id: number
@@ -26,11 +26,16 @@ export function ExpedienteActividades({ expedienteId, actividades }: ExpedienteA
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
-  const [actividadesState, setActividadesState] = useState<Actividad[]>(actividades)
+  const [actividadesState, setActividadesState] = useState<Actividad[]>(
+    actividades.filter((act) => act.descripcion !== "Expediente actualizado"),
+  )
   const [isCreating, setIsCreating] = useState(false)
   const [nuevaActividad, setNuevaActividad] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [mostrarTodas, setMostrarTodas] = useState(false)
+  const [editandoId, setEditandoId] = useState<number | null>(null)
+  const [textoEditado, setTextoEditado] = useState("")
+  const [eliminando, setEliminando] = useState(false)
 
   // Función para crear una nueva actividad
   const crearActividad = async () => {
@@ -60,7 +65,10 @@ export function ExpedienteActividades({ expedienteId, actividades }: ExpedienteA
       if (error) throw error
 
       // Actualizar el estado local
-      setActividadesState((prevActividades) => [data, ...prevActividades])
+      setActividadesState((prevActividades) => [
+        data,
+        ...prevActividades.filter((act) => act.descripcion !== "Expediente actualizado"),
+      ])
 
       // Limpiar el formulario
       setNuevaActividad("")
@@ -79,6 +87,89 @@ export function ExpedienteActividades({ expedienteId, actividades }: ExpedienteA
       })
     } finally {
       setIsSubmitting(false)
+      router.refresh()
+    }
+  }
+
+  // Función para iniciar la edición de una actividad
+  const iniciarEdicion = (actividad: Actividad) => {
+    setEditandoId(actividad.id)
+    setTextoEditado(actividad.descripcion)
+  }
+
+  // Función para cancelar la edición
+  const cancelarEdicion = () => {
+    setEditandoId(null)
+    setTextoEditado("")
+  }
+
+  // Función para guardar la edición
+  const guardarEdicion = async (id: number) => {
+    if (!textoEditado.trim()) {
+      toast({
+        title: "Error",
+        description: "La descripción de la actividad es obligatoria.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+
+      const { error } = await supabase.from("actividades_expediente").update({ descripcion: textoEditado }).eq("id", id)
+
+      if (error) throw error
+
+      // Actualizar el estado local
+      setActividadesState((prevActividades) =>
+        prevActividades.map((act) => (act.id === id ? { ...act, descripcion: textoEditado } : act)),
+      )
+
+      setEditandoId(null)
+      setTextoEditado("")
+
+      toast({
+        title: "Actividad actualizada",
+        description: "La actividad ha sido actualizada correctamente.",
+      })
+    } catch (error) {
+      console.error("Error al actualizar actividad:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la actividad. Intente nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Función para eliminar una actividad
+  const eliminarActividad = async (id: number) => {
+    try {
+      setEliminando(true)
+
+      const { error } = await supabase.from("actividades_expediente").delete().eq("id", id)
+
+      if (error) throw error
+
+      // Actualizar el estado local
+      setActividadesState((prevActividades) => prevActividades.filter((act) => act.id !== id))
+
+      toast({
+        title: "Actividad eliminada",
+        description: "La actividad ha sido eliminada correctamente.",
+      })
+    } catch (error) {
+      console.error("Error al eliminar actividad:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la actividad. Intente nuevamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setEliminando(false)
       router.refresh()
     }
   }
@@ -138,8 +229,61 @@ export function ExpedienteActividades({ expedienteId, actividades }: ExpedienteA
           <div className="space-y-3">
             {actividadesMostradas.map((actividad) => (
               <div key={actividad.id} className={`p-3 border rounded-md ${actividad.automatica ? "bg-muted/30" : ""}`}>
-                <p className="font-medium">{actividad.descripcion}</p>
-                <p className="text-sm text-muted-foreground">{formatDate(actividad.fecha)}</p>
+                {editandoId === actividad.id ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={textoEditado}
+                      onChange={(e) => setTextoEditado(e.target.value)}
+                      placeholder="Descripción de la actividad"
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={cancelarEdicion} disabled={isSubmitting}>
+                        <X className="h-4 w-4 mr-1" />
+                        Cancelar
+                      </Button>
+                      <Button size="sm" onClick={() => guardarEdicion(actividad.id)} disabled={isSubmitting}>
+                        {isSubmitting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-1" />
+                            Guardar
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium">{actividad.descripcion}</p>
+                        <p className="text-sm text-muted-foreground">{formatDate(actividad.fecha)}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => iniciarEdicion(actividad)}
+                          title="Editar actividad"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => eliminarActividad(actividad.id)}
+                          disabled={eliminando}
+                          title="Eliminar actividad"
+                        >
+                          {eliminando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
 
