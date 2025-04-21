@@ -4,8 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { formatDate } from "@/lib/utils"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Users } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export function RecentClientes() {
@@ -20,48 +19,42 @@ export function RecentClientes() {
       try {
         setLoading(true)
 
-        // Verificar si la tabla clientes existe
-        const { error: tableCheckError } = await supabase.from("clientes").select("id").limit(1)
+        // Verificar si la tabla personas existe
+        const { error: tableCheckError } = await supabase.from("personas").select("id").limit(1)
 
-        if (tableCheckError) {
-          console.error("Error checking table:", tableCheckError)
+        if (tableCheckError && tableCheckError.message.includes("does not exist")) {
+          console.log("La tabla 'personas' no existe en la base de datos")
           setTableExists(false)
-          setError("La tabla 'clientes' no existe en la base de datos.")
+          setLoading(false)
+          return
+        } else if (tableCheckError) {
+          console.error("Error checking table:", tableCheckError)
+          setError(tableCheckError.message)
           setLoading(false)
           return
         }
 
-        // Obtener una muestra para ver qué columnas están disponibles
-        const { data: sampleData, error: sampleError } = await supabase.from("clientes").select("*").limit(1)
+        // Verificar si la tabla clientes existe
+        const { error: clientesTableCheckError } = await supabase.from("clientes").select("id").limit(1)
 
-        if (sampleError) {
-          console.error("Error fetching sample:", sampleError)
-          setError(sampleError.message)
+        if (clientesTableCheckError && !clientesTableCheckError.message.includes("does not exist")) {
+          console.error("Error checking clientes table:", clientesTableCheckError)
+          setError(clientesTableCheckError.message)
           setLoading(false)
           return
         }
 
-        if (!sampleData || sampleData.length === 0) {
-          setClientes([])
-          setLoading(false)
-          return
+        // Si la tabla clientes existe, usamos la relación, si no, solo usamos personas
+        let query
+        if (!clientesTableCheckError) {
+          // La tabla clientes existe
+          query = supabase.from("personas").select("*, clientes(*)").order("id", { ascending: false }).limit(5)
+        } else {
+          // Solo usamos la tabla personas
+          query = supabase.from("personas").select("*").order("id", { ascending: false }).limit(5)
         }
 
-        // Determinar qué columnas usar basado en lo que está disponible
-        const sample = sampleData[0]
-        console.log("Columnas disponibles:", Object.keys(sample))
-
-        // Determinar qué columna usar para ordenar
-        let orderColumn = "id"
-        if ("fecha_alta" in sample) orderColumn = "fecha_alta"
-        else if ("created_at" in sample) orderColumn = "created_at"
-
-        // Construir la consulta para obtener clientes con sus personas relacionadas
-        const { data, error } = await supabase
-          .from("clientes")
-          .select("*, personas(*)")
-          .order(orderColumn, { ascending: false })
-          .limit(5)
+        const { data, error } = await query
 
         if (error) {
           console.error("Error fetching clientes:", error)
@@ -85,15 +78,14 @@ export function RecentClientes() {
       <Card>
         <CardHeader>
           <CardTitle>Clientes Recientes</CardTitle>
-          <CardDescription>Los últimos clientes registrados</CardDescription>
+          <CardDescription>Últimos clientes registrados en el sistema</CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert variant="destructive">
+          <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>Tabla no encontrada</AlertTitle>
             <AlertDescription>
-              La tabla 'clientes' no existe en la base de datos. Por favor, cree la tabla para ver los clientes
-              recientes.
+              La tabla 'personas' no existe en la base de datos. Esta funcionalidad requiere que la tabla esté creada.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -106,7 +98,7 @@ export function RecentClientes() {
       <Card>
         <CardHeader>
           <CardTitle>Clientes Recientes</CardTitle>
-          <CardDescription>Los últimos clientes registrados</CardDescription>
+          <CardDescription>Últimos clientes registrados en el sistema</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -123,7 +115,7 @@ export function RecentClientes() {
     <Card>
       <CardHeader>
         <CardTitle>Clientes Recientes</CardTitle>
-        <CardDescription>Los últimos clientes registrados</CardDescription>
+        <CardDescription>Últimos clientes registrados en el sistema</CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -139,26 +131,25 @@ export function RecentClientes() {
             ))}
           </div>
         ) : clientes.length === 0 ? (
-          <p className="text-muted-foreground">No hay clientes registrados.</p>
+          <Alert>
+            <Users className="h-4 w-4" />
+            <AlertTitle>Sin clientes</AlertTitle>
+            <AlertDescription>No hay clientes registrados en el sistema.</AlertDescription>
+          </Alert>
         ) : (
           <div className="space-y-4">
             {clientes.map((cliente) => {
-              // Obtener información de la persona si está disponible
-              const persona = cliente.personas || {}
-              const nombre = persona.nombre || "Sin nombre"
-              const apellido = persona.apellido || ""
-              const nombreCompleto = `${nombre} ${apellido}`.trim()
-
-              // Determinar qué campos usar
-              const id = cliente.id || "N/A"
-              const fecha = cliente.fecha_alta || cliente.created_at || "Fecha desconocida"
+              // Determinar si es cliente o solo persona
+              const esCliente = cliente.clientes && cliente.clientes.id
 
               return (
-                <div key={id} className="flex items-start space-x-4 border-b pb-4 last:border-0">
+                <div key={cliente.id} className="flex items-start space-x-4 border-b pb-4 last:border-0">
                   <div className="flex-1">
-                    <p className="font-medium">{nombreCompleto}</p>
+                    <p className="font-medium">
+                      {cliente.nombre} {cliente.apellidos}
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                      Cliente desde: {typeof fecha === "string" ? fecha : formatDate(fecha)}
+                      {esCliente ? "Cliente" : "Persona"} - {cliente.email || "Sin email"}
                     </p>
                   </div>
                 </div>

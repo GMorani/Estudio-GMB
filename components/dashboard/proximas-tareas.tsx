@@ -5,8 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { formatDate } from "@/lib/utils"
-import { AlertCircle, CheckCircle2 } from "lucide-react"
+import { AlertCircle, CheckCircle2, PlusCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
 
 export function ProximasTareas() {
   const [tareas, setTareas] = useState([])
@@ -14,6 +16,7 @@ export function ProximasTareas() {
   const [error, setError] = useState(null)
   const [tableExists, setTableExists] = useState(true)
   const supabase = createClientComponentClient()
+  const { toast } = useToast()
 
   useEffect(() => {
     async function fetchTareas() {
@@ -23,29 +26,19 @@ export function ProximasTareas() {
         // Verificar si la tabla tareas existe
         const { error: tableCheckError } = await supabase.from("tareas").select("id").limit(1)
 
-        if (tableCheckError) {
-          console.error("Error checking table:", tableCheckError)
+        if (tableCheckError && tableCheckError.message.includes("does not exist")) {
+          console.log("La tabla 'tareas' no existe en la base de datos")
           setTableExists(false)
-          setError("La tabla 'tareas' no existe en la base de datos.")
+          setLoading(false)
+          return
+        } else if (tableCheckError) {
+          console.error("Error checking table:", tableCheckError)
+          setError(tableCheckError.message)
           setLoading(false)
           return
         }
 
-        // Obtener una muestra para ver qué columnas están disponibles
-        const { data: sampleData, error: sampleError } = await supabase.from("tareas").select("*").limit(1)
-
-        if (sampleError) {
-          console.error("Error fetching sample:", sampleError)
-          setError(sampleError.message)
-          setLoading(false)
-          return
-        }
-
-        // Determinar qué columnas usar basado en lo que está disponible
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-
-        // Construir la consulta
+        // Si llegamos aquí, la tabla existe
         const { data, error } = await supabase
           .from("tareas")
           .select("*, expedientes(*)")
@@ -70,6 +63,24 @@ export function ProximasTareas() {
     fetchTareas()
   }, [supabase])
 
+  const handleCreateTable = async () => {
+    try {
+      // Esta función simula la creación de la tabla
+      // En un entorno real, esto debería hacerse a través de migraciones o un panel de administración
+      toast({
+        title: "Información",
+        description: "La creación de tablas debe realizarse desde el panel de Supabase o mediante migraciones.",
+      })
+    } catch (error) {
+      console.error("Error creating table:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo crear la tabla. Por favor, contacte al administrador.",
+      })
+    }
+  }
+
   if (!tableExists) {
     return (
       <Card>
@@ -78,13 +89,19 @@ export function ProximasTareas() {
           <CardDescription>Tareas pendientes más urgentes</CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert variant="destructive">
+          <Alert className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>Tabla no encontrada</AlertTitle>
             <AlertDescription>
-              La tabla 'tareas' no existe en la base de datos. Por favor, cree la tabla para ver las próximas tareas.
+              La tabla 'tareas' no existe en la base de datos. Esta funcionalidad requiere que la tabla esté creada.
             </AlertDescription>
           </Alert>
+          <div className="flex justify-center">
+            <Button variant="outline" onClick={handleCreateTable} className="flex items-center gap-2">
+              <PlusCircle className="h-4 w-4" />
+              <span>Información sobre creación de tablas</span>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     )

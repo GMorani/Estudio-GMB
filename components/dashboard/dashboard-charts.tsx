@@ -4,104 +4,100 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Info } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { BarChart, Bar, PieChart, Pie, Cell, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from "recharts"
+import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
 
 export function DashboardCharts() {
   const [expedientesData, setExpedientesData] = useState([])
-  const [tareasData, setTareasData] = useState([])
+  const [estadosData, setEstadosData] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [expedientesTableExists, setExpedientesTableExists] = useState(true)
-  const [tareasTableExists, setTareasTableExists] = useState(true)
   const supabase = createClientComponentClient()
 
-  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#FF6B6B"]
+  // Colores para los gráficos
+  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"]
+
+  // Función auxiliar para verificar si una tabla existe
+  async function checkTableExists(tableName) {
+    try {
+      const { data, error } = await supabase.from(tableName).select("*").limit(1)
+      return !error
+    } catch (err) {
+      console.error(`Error checking if table ${tableName} exists:`, err)
+      return false
+    }
+  }
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true)
 
-        // Verificar si la tabla expedientes existe
-        const { error: expedientesTableCheckError } = await supabase.from("expedientes").select("id").limit(1)
+        // Verificar si las tablas existen
+        const expedientesExists = await checkTableExists("expedientes")
+        const estadosExpedienteExists = await checkTableExists("estados_expediente")
+        const expedienteEstadosExists = await checkTableExists("expediente_estados")
 
-        if (expedientesTableCheckError) {
-          console.error("Error checking expedientes table:", expedientesTableCheckError)
-          setExpedientesTableExists(false)
-        } else {
-          // Obtener datos de expedientes por estado
-          const { data: expedientesRawData, error: expedientesError } = await supabase
-            .from("expedientes")
-            .select("estado")
-
-          if (expedientesError) {
-            console.error("Error fetching expedientes:", expedientesError)
-          } else if (expedientesRawData) {
-            // Procesar datos para el gráfico
-            const estadosCount = {}
-            expedientesRawData.forEach((exp) => {
-              const estado = exp.estado || "Sin estado"
-              estadosCount[estado] = (estadosCount[estado] || 0) + 1
-            })
-
-            const chartData = Object.entries(estadosCount).map(([name, value]) => ({
-              name,
-              value,
-            }))
-
-            setExpedientesData(chartData)
-          }
+        if (!expedientesExists) {
+          console.log("La tabla 'expedientes' no existe")
+          setError("La tabla 'expedientes' no existe en la base de datos")
+          setLoading(false)
+          return
         }
 
-        // Verificar si la tabla tareas existe
-        const { error: tareasTableCheckError } = await supabase.from("tareas").select("id").limit(1)
+        // Contar expedientes totales
+        const { count: expedientesCount, error: countError } = await supabase
+          .from("expedientes")
+          .select("*", { count: "exact", head: true })
 
-        if (tareasTableCheckError) {
-          console.error("Error checking tareas table:", tareasTableCheckError)
-          setTareasTableExists(false)
+        if (countError) {
+          console.error("Error counting expedientes:", countError)
+          setError("Error al contar expedientes: " + countError.message)
         } else {
-          // Obtener datos de tareas por estado de cumplimiento
-          const { data: tareasRawData, error: tareasError } = await supabase
-            .from("tareas")
-            .select("cumplida, fecha_vencimiento")
+          // Crear datos para el gráfico de expedientes
+          setExpedientesData([{ name: "Total Expedientes", value: expedientesCount || 0 }])
+        }
 
-          if (tareasError) {
-            console.error("Error fetching tareas:", tareasError)
-          } else if (tareasRawData) {
-            // Procesar datos para el gráfico
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
+        // Si tenemos las tablas de estados, obtener datos de estados
+        if (estadosExpedienteExists && expedienteEstadosExists) {
+          // Obtener todos los estados
+          const { data: estados, error: estadosError } = await supabase
+            .from("estados_expediente")
+            .select("id, nombre, color")
 
-            let cumplidas = 0
-            let pendientes = 0
-            let vencidas = 0
+          if (estadosError) {
+            console.error("Error fetching estados:", estadosError)
+          } else if (estados && estados.length > 0) {
+            // Obtener conteo de expedientes por estado
+            const { data: expedienteEstados, error: expedienteEstadosError } = await supabase
+              .from("expediente_estados")
+              .select("estado_id, expediente_id")
 
-            tareasRawData.forEach((tarea) => {
-              if (tarea.cumplida) {
-                cumplidas++
-              } else {
-                const fechaVencimiento = new Date(tarea.fecha_vencimiento)
-                if (fechaVencimiento < today) {
-                  vencidas++
-                } else {
-                  pendientes++
-                }
-              }
-            })
+            if (expedienteEstadosError) {
+              console.error("Error fetching expediente_estados:", expedienteEstadosError)
+            } else if (expedienteEstados && expedienteEstados.length > 0) {
+              // Contar expedientes por estado
+              const estadoCount = {}
+              expedienteEstados.forEach((item) => {
+                estadoCount[item.estado_id] = (estadoCount[item.estado_id] || 0) + 1
+              })
 
-            const chartData = [
-              { name: "Cumplidas", value: cumplidas },
-              { name: "Pendientes", value: pendientes },
-              { name: "Vencidas", value: vencidas },
-            ]
+              // Crear datos para el gráfico
+              const chartData = estados
+                .map((estado) => ({
+                  name: estado.nombre,
+                  value: estadoCount[estado.id] || 0,
+                  color: estado.color || COLORS[estado.id % COLORS.length],
+                }))
+                .filter((item) => item.value > 0) // Solo incluir estados con expedientes
 
-            setTareasData(chartData)
+              setEstadosData(chartData)
+            }
           }
         }
       } catch (err) {
-        console.error("Error fetching chart data:", err)
+        console.error("Error fetching data:", err)
         setError(err.message)
       } finally {
         setLoading(false)
@@ -113,41 +109,68 @@ export function DashboardCharts() {
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
+      <Card>
+        <CardHeader>
+          <CardTitle>Estadísticas</CardTitle>
+          <CardDescription>Visualización de datos del sistema</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="grid gap-4 md:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Expedientes por Estado</CardTitle>
-          <CardDescription>Distribución de expedientes según su estado</CardDescription>
+          <CardTitle>Expedientes</CardTitle>
+          <CardDescription>Total de expedientes en el sistema</CardDescription>
         </CardHeader>
-        <CardContent className="h-80">
+        <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Skeleton className="h-64 w-full" />
-            </div>
-          ) : !expedientesTableExists ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>La tabla 'expedientes' no existe en la base de datos.</AlertDescription>
-            </Alert>
+            <Skeleton className="h-[300px] w-full" />
           ) : expedientesData.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">No hay datos disponibles</p>
-            </div>
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Sin datos</AlertTitle>
+              <AlertDescription>No hay datos de expedientes para mostrar.</AlertDescription>
+            </Alert>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <div className="flex flex-col items-center justify-center h-[300px]">
+              <div className="text-6xl font-bold">{expedientesData[0].value}</div>
+              <div className="text-muted-foreground mt-2">Expedientes registrados</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Estados de Expedientes</CardTitle>
+          <CardDescription>Distribución de expedientes por estado</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-[300px] w-full" />
+          ) : estadosData.length === 0 ? (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Sin datos de estados</AlertTitle>
+              <AlertDescription>
+                No hay datos de estados de expedientes para mostrar o las tablas necesarias no existen.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
-                  data={expedientesData}
+                  data={estadosData}
                   cx="50%"
                   cy="50%"
                   labelLine={true}
@@ -156,59 +179,12 @@ export function DashboardCharts() {
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {expedientesData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  {estadosData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
-                <Legend />
               </PieChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Estado de Tareas</CardTitle>
-          <CardDescription>Distribución de tareas según su estado</CardDescription>
-        </CardHeader>
-        <CardContent className="h-80">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Skeleton className="h-64 w-full" />
-            </div>
-          ) : !tareasTableExists ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>La tabla 'tareas' no existe en la base de datos.</AlertDescription>
-            </Alert>
-          ) : tareasData.length === 0 ? (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">No hay datos disponibles</p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={tareasData}
-                margin={{
-                  top: 20,
-                  right: 30,
-                  left: 20,
-                  bottom: 5,
-                }}
-              >
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="value" name="Cantidad" fill="#8884d8">
-                  {tareasData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
             </ResponsiveContainer>
           )}
         </CardContent>

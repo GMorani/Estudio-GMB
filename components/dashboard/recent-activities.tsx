@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { formatDate } from "@/lib/utils"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Activity } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export function RecentActivities() {
@@ -20,47 +20,26 @@ export function RecentActivities() {
       try {
         setLoading(true)
 
-        // Verificar si la tabla expedientes existe
-        const { error: tableCheckError } = await supabase.from("expedientes").select("id").limit(1)
+        // Verificar si la tabla actividades existe
+        const { error: tableCheckError } = await supabase.from("actividades").select("id").limit(1)
 
-        if (tableCheckError) {
-          console.error("Error checking table:", tableCheckError)
+        if (tableCheckError && tableCheckError.message.includes("does not exist")) {
+          console.log("La tabla 'actividades' no existe en la base de datos")
           setTableExists(false)
-          setError("La tabla 'expedientes' no existe en la base de datos.")
+          setLoading(false)
+          return
+        } else if (tableCheckError) {
+          console.error("Error checking table:", tableCheckError)
+          setError(tableCheckError.message)
           setLoading(false)
           return
         }
 
-        // Obtener una muestra para ver qué columnas están disponibles
-        const { data: sampleData, error: sampleError } = await supabase.from("expedientes").select("*").limit(1)
-
-        if (sampleError) {
-          console.error("Error fetching sample:", sampleError)
-          setError(sampleError.message)
-          setLoading(false)
-          return
-        }
-
-        if (!sampleData || sampleData.length === 0) {
-          setActivities([])
-          setLoading(false)
-          return
-        }
-
-        // Determinar qué columnas usar basado en lo que está disponible
-        const sample = sampleData[0]
-        console.log("Columnas disponibles:", Object.keys(sample))
-
-        // Determinar qué columna usar para ordenar
-        let orderColumn = "id"
-        if ("fecha_alta" in sample) orderColumn = "fecha_alta"
-        else if ("created_at" in sample) orderColumn = "created_at"
-
-        // Construir la consulta
+        // Si llegamos aquí, la tabla existe
         const { data, error } = await supabase
-          .from("expedientes")
-          .select("*")
-          .order(orderColumn, { ascending: false })
+          .from("actividades")
+          .select("*, expedientes(*)")
+          .order("fecha", { ascending: false })
           .limit(5)
 
         if (error) {
@@ -85,15 +64,15 @@ export function RecentActivities() {
       <Card>
         <CardHeader>
           <CardTitle>Actividad Reciente</CardTitle>
-          <CardDescription>Las últimas actualizaciones de expedientes</CardDescription>
+          <CardDescription>Últimas actividades registradas en el sistema</CardDescription>
         </CardHeader>
         <CardContent>
-          <Alert variant="destructive">
+          <Alert>
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>Tabla no encontrada</AlertTitle>
             <AlertDescription>
-              La tabla 'expedientes' no existe en la base de datos. Por favor, cree la tabla para ver la actividad
-              reciente.
+              La tabla 'actividades' no existe en la base de datos. Esta funcionalidad requiere que la tabla esté
+              creada.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -106,7 +85,7 @@ export function RecentActivities() {
       <Card>
         <CardHeader>
           <CardTitle>Actividad Reciente</CardTitle>
-          <CardDescription>Las últimas actualizaciones de expedientes</CardDescription>
+          <CardDescription>Últimas actividades registradas en el sistema</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -123,7 +102,7 @@ export function RecentActivities() {
     <Card>
       <CardHeader>
         <CardTitle>Actividad Reciente</CardTitle>
-        <CardDescription>Las últimas actualizaciones de expedientes</CardDescription>
+        <CardDescription>Últimas actividades registradas en el sistema</CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -139,28 +118,26 @@ export function RecentActivities() {
             ))}
           </div>
         ) : activities.length === 0 ? (
-          <p className="text-muted-foreground">No hay actividad reciente.</p>
+          <Alert>
+            <Activity className="h-4 w-4" />
+            <AlertTitle>Sin actividades</AlertTitle>
+            <AlertDescription>No hay actividades registradas en el sistema.</AlertDescription>
+          </Alert>
         ) : (
           <div className="space-y-4">
             {activities.map((activity) => {
-              // Determinar qué campos usar
-              const id = activity.id || "N/A"
-              const numero = activity.numero || activity.referencia || id
-              const fecha = activity.fecha_alta || activity.created_at || "Fecha desconocida"
-              const estado = activity.estado || "Estado desconocido"
+              // Obtener información del expediente si está disponible
+              const expedienteInfo = activity.expedientes
+                ? `Exp. #${activity.expedientes.numero || activity.expedientes.referencia || activity.expedientes.id || "N/A"}`
+                : "Sin expediente"
 
               return (
-                <div key={id} className="flex items-start space-x-4 border-b pb-4 last:border-0">
+                <div key={activity.id} className="flex items-start space-x-4 border-b pb-4 last:border-0">
                   <div className="flex-1">
-                    <p className="font-medium">Expediente #{numero}</p>
+                    <p className="font-medium">{activity.descripcion || "Sin descripción"}</p>
                     <p className="text-sm text-muted-foreground">
-                      {typeof fecha === "string" ? fecha : formatDate(fecha)}
+                      {expedienteInfo} - Fecha: {formatDate(activity.fecha)}
                     </p>
-                  </div>
-                  <div>
-                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-800">
-                      {estado}
-                    </span>
                   </div>
                 </div>
               )
