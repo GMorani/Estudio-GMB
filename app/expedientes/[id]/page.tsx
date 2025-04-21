@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatDate, formatCurrency } from "@/lib/utils"
 import { ArrowLeft, Pencil } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { ExpedienteTareas } from "@/components/expedientes/expediente-tareas"
+import { ExpedienteActividades } from "@/components/expedientes/expediente-actividades"
 
 // Marcar la página como dinámica para asegurar que siempre se renderice en el servidor
 export const dynamic = "force-dynamic"
@@ -108,7 +110,6 @@ export default async function ExpedienteDetallePage({
       .select("*")
       .eq("expediente_id", params.id)
       .order("fecha", { ascending: false })
-      .limit(10)
 
     const actividades = actividadesData || []
 
@@ -117,6 +118,7 @@ export default async function ExpedienteDetallePage({
       .from("tareas_expediente")
       .select("*")
       .eq("expediente_id", params.id)
+      .eq("cumplida", false)
       .order("fecha_vencimiento", { ascending: true })
 
     const tareas = tareasData || []
@@ -244,52 +246,11 @@ export default async function ExpedienteDetallePage({
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Actividades Recientes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {actividades.length === 0 ? (
-                <p className="text-muted-foreground">No hay actividades registradas</p>
-              ) : (
-                <div className="space-y-4">
-                  {actividades.map((actividad, index) => (
-                    <div key={index} className="border-b pb-2 last:border-0">
-                      <p className="text-sm">{actividad.descripcion || "Sin descripción"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {actividad.fecha ? formatDate(actividad.fecha) : "Fecha no disponible"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Componente de Actividades */}
+          <ExpedienteActividades expedienteId={params.id} actividades={actividades} />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Tareas Pendientes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {tareas.length === 0 ? (
-                <p className="text-muted-foreground">No hay tareas pendientes</p>
-              ) : (
-                <div className="space-y-4">
-                  {tareas.map((tarea, index) => (
-                    <div
-                      key={index}
-                      className={`border rounded-md p-2 ${tarea.cumplida ? "opacity-60 line-through" : ""}`}
-                    >
-                      <p className="font-medium">{tarea.descripcion || "Sin descripción"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Vencimiento: {tarea.fecha_vencimiento ? formatDate(tarea.fecha_vencimiento) : "No especificado"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Componente de Tareas */}
+          <ExpedienteTareas expedienteId={params.id} tareas={tareas} />
         </div>
       </div>
     )
