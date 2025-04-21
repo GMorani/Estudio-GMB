@@ -1,10 +1,13 @@
 "use client"
 
+import { ClienteForm } from "@/components/clientes/cliente-form"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft } from "lucide-react"
-import { ClienteForm } from "@/components/clientes/cliente-form"
+
+// Marcar la página como dinámica
+export const dynamic = "force-dynamic"
 
 export default function NuevoClientePage() {
   const router = useRouter()
@@ -24,7 +27,7 @@ export default function NuevoClientePage() {
           <CardDescription>Ingresa la información del nuevo cliente</CardDescription>
         </CardHeader>
         <CardContent>
-          <ClienteForm onSuccess={(id) => router.push(`/clientes/${id}`)} />
+          <ClienteForm />
         </CardContent>
       </Card>
     </div>

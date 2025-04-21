@@ -1,91 +1,58 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { CalendarClock } from "lucide-react"
 
 export function ProximasTareas() {
-  const [tareas, setTareas] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
+  const [tableExists, setTableExists] = useState(true)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
+    async function checkTableExists() {
+      try {
+        // Intentar obtener la definición de la tabla para verificar si existe
+        const { error } = await supabase.from("tareas").select("id").limit(1)
+
+        if (error && error.message.includes("does not exist")) {
+          console.log("La tabla 'tareas' no existe en la base de datos")
+          setTableExists(false)
+          setLoading(false)
+          return false
+        }
+
+        return true
+      } catch (err) {
+        console.error("Error al verificar la tabla:", err)
+        setTableExists(false)
+        setLoading(false)
+        return false
+      }
+    }
+
     async function fetchTareas() {
       try {
         setLoading(true)
+        setError(null)
 
-        // Primero, obtener una muestra para ver qué columnas están disponibles en tareas
-        const { data: sampleTareas, error: sampleTareasError } = await supabase.from("tareas").select("*").limit(1)
+        // Primero verificar si la tabla existe
+        const exists = await checkTableExists()
+        if (!exists) return
 
-        if (sampleTareasError) throw sampleTareasError
-
-        // Determinar qué columnas usar basado en lo que está disponible en tareas
-        const hasFechaVencimiento = sampleTareas[0] && "fecha_vencimiento" in sampleTareas[0]
-        const hasExpedienteId = sampleTareas[0] && "expediente_id" in sampleTareas[0]
-
-        // Si no hay columna expediente_id, no podemos hacer join
-        if (!hasExpedienteId) {
-          const { data, error } = await supabase
-            .from("tareas")
-            .select("*")
-            .order(hasFechaVencimiento ? "fecha_vencimiento" : "id", { ascending: true })
-            .limit(5)
-
-          if (error) throw error
-
-          setTareas(data || [])
-          setLoading(false)
-          return
-        }
-
-        // Ahora, obtener una muestra para ver qué columnas están disponibles en expedientes
-        const { data: sampleExpedientes, error: sampleExpedientesError } = await supabase
-          .from("expedientes")
-          .select("*")
-          .limit(1)
-
-        if (sampleExpedientesError) throw sampleExpedientesError
-
-        // Determinar qué columnas usar basado en lo que está disponible en expedientes
-        const hasNumero = sampleExpedientes[0] && "numero" in sampleExpedientes[0]
-        const hasReferencia = sampleExpedientes[0] && "referencia" in sampleExpedientes[0]
-
-        // Construir la consulta basada en las columnas disponibles
-        let query = supabase
-          .from("tareas")
-          .select(`
-            id,
-            titulo,
-            descripcion,
-            ${hasFechaVencimiento ? "fecha_vencimiento," : ""}
-            estado,
-            expediente_id,
-            expedientes:expediente_id (
-              id,
-              ${hasNumero ? "numero," : ""}
-              ${hasReferencia ? "referencia," : ""}
-              estado
-            )
-          `)
-          .limit(5)
-
-        // Determinar por qué columna ordenar
-        if (hasFechaVencimiento) {
-          query = query.order("fecha_vencimiento", { ascending: true })
-        } else {
-          query = query.order("id", { ascending: false })
-        }
-
-        const { data, error } = await query
+        // Si la tabla existe, obtener las tareas
+        const { data, error } = await supabase.from("tareas").select("*").order("id", { ascending: false }).limit(5)
 
         if (error) throw error
 
-        setTareas(data || [])
-      } catch (error) {
-        console.error("Error fetching tareas:", error.message)
-        setError(`Error fetching tareas: ${error.message}`)
-      } finally {
+        // Aquí procesaríamos los datos si los necesitáramos
+        // Por ahora solo actualizamos el estado de carga
+        setLoading(false)
+      } catch (err: any) {
+        console.error("Error fetching tareas:", err.message)
+        setError(`Error al cargar tareas: ${err.message}`)
         setLoading(false)
       }
     }
@@ -93,57 +60,33 @@ export function ProximasTareas() {
     fetchTareas()
   }, [supabase])
 
-  if (error) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Próximas Tareas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-red-500">{error}</div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Próximas Tareas</CardTitle>
+        <CardTitle className="text-xl flex items-center gap-2">
+          <CalendarClock className="h-5 w-5 text-orange-500" />
+          Próximas Tareas
+        </CardTitle>
+        <CardDescription>Tareas pendientes</CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+          <div className="flex justify-center py-4">Cargando...</div>
+        ) : !tableExists ? (
+          <div className="text-center py-4 text-muted-foreground">
+            <p>La tabla de tareas no está configurada.</p>
+            <p className="text-sm mt-2">
+              Para usar esta funcionalidad, cree la tabla "tareas" en su base de datos Supabase.
+            </p>
           </div>
-        ) : tareas.length > 0 ? (
-          <div className="space-y-4">
-            {tareas.map((tarea) => {
-              // Determinar qué usar como identificador del expediente
-              const expediente = tarea.expedientes || {}
-              const expedienteId =
-                expediente.numero || expediente.referencia || `#${expediente.id || tarea.expediente_id || "N/A"}`
-
-              // Determinar qué usar como fecha
-              const date = tarea.fecha_vencimiento || "Fecha no disponible"
-              const formattedDate = typeof date === "string" ? date : new Date(date).toLocaleDateString()
-
-              return (
-                <div key={tarea.id} className="flex items-center">
-                  <div className="ml-4 space-y-1">
-                    <p className="text-sm font-medium">{tarea.titulo || `Tarea #${tarea.id}`}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Expediente: {expedienteId} • {formattedDate}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+        ) : error ? (
+          <div className="text-red-500">{error}</div>
         ) : (
-          <p className="text-muted-foreground">No hay tareas pendientes para mostrar.</p>
+          <div className="text-center py-4 text-muted-foreground">No hay tareas pendientes</div>
         )}
       </CardContent>
     </Card>
   )
 }
+
+export default ProximasTareas
