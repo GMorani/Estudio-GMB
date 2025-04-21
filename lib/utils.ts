@@ -1,39 +1,35 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
+export function formatDNI(dni_cuit: string | undefined | null): string {
+  if (!dni_cuit) return "-"
 
-export function formatDNI(dni: string | undefined): string {
-  if (!dni) return ""
+  const cleanedInput = dni_cuit.replace(/[^0-9]/g, "")
 
-  const cleanedDNI = dni.replace(/\D/g, "")
-
-  if (cleanedDNI.length <= 2) {
-    return cleanedDNI
-  } else if (cleanedDNI.length <= 6) {
-    return `${cleanedDNI.slice(0, 2)}.${cleanedDNI.slice(2)}`
+  if (cleanedInput.length === 8) {
+    return cleanedInput.replace(/(\d{2})(\d{3})(\d{3})/, "$1.$2.$3")
+  } else if (cleanedInput.length === 11) {
+    return cleanedInput.replace(/(\d{2})(\d{8})(\d{1})/, "$1-$2-$3")
   } else {
-    return `${cleanedDNI.slice(0, 2)}.${cleanedDNI.slice(2, 5)}.${cleanedDNI.slice(5)}`
+    return dni_cuit
   }
 }
 
-export function formatTelefono(telefono: string | undefined): string {
-  if (!telefono) return ""
+export function formatTelefono(telefono: string | undefined | null): string {
+  if (!telefono) return "-"
 
-  const cleanedTelefono = telefono.replace(/\D/g, "")
+  const cleanedInput = telefono.replace(/[^0-9]/g, "")
 
-  if (cleanedTelefono.length <= 3) {
-    return cleanedTelefono
-  } else if (cleanedTelefono.length <= 6) {
-    return `${cleanedTelefono.slice(0, 3)}-${cleanedTelefono.slice(3)}`
+  if (cleanedInput.length === 10) {
+    return cleanedInput.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
+  } else if (cleanedInput.length === 11) {
+    return cleanedInput.replace(/(\d{2})(\d{3})(\d{3})(\d{4})/, "$1-$2-$3-$4")
   } else {
-    return `${cleanedTelefono.slice(0, 3)}-${cleanedTelefono.slice(3, 6)}-${cleanedTelefono.slice(6)}`
+    return telefono
   }
 }
 
-export function formatDate(dateString: string | undefined): string {
+export function formatDate(dateString: string | undefined | null): string {
   if (!dateString) return "-"
 
   try {
@@ -48,7 +44,7 @@ export function formatDate(dateString: string | undefined): string {
   }
 }
 
-export function formatCurrency(amount: number | null | undefined): string {
+export function formatCurrency(amount: number | undefined | null): string {
   if (amount === null || amount === undefined) {
     return "-"
   }
@@ -57,4 +53,8 @@ export function formatCurrency(amount: number | null | undefined): string {
     style: "currency",
     currency: "ARS",
   }).format(amount)
+}
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
 }
