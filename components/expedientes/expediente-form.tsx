@@ -35,11 +35,12 @@ const expedienteSchema = z.object({
 type ExpedienteFormValues = z.infer<typeof expedienteSchema>
 
 type ExpedienteFormProps = {
-  expediente?: any
+  expedienteId?: string
+  initialData?: any
   onSuccess?: (id: string) => void
 }
 
-export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
+export function ExpedienteForm({ expedienteId, initialData, onSuccess }: ExpedienteFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
@@ -55,55 +56,55 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
     peritos: [] as any[],
   })
 
+  // Procesar los datos iniciales
+  const processInitialData = () => {
+    if (!initialData) return {}
+
+    // Extraer estados del expediente
+    const estados = initialData.expediente_estados?.map((estado: any) => estado.estado_id) || []
+
+    // Extraer personas por rol
+    const expedientePersonas = initialData.expediente_personas || []
+    const clientes = expedientePersonas
+      .filter((persona: any) => persona.rol === "Cliente")
+      .map((persona: any) => persona.persona_id)
+
+    const abogados = expedientePersonas
+      .filter((persona: any) => persona.rol === "Abogado")
+      .map((persona: any) => persona.persona_id)
+
+    const aseguradoras = expedientePersonas
+      .filter((persona: any) => persona.rol === "Aseguradora")
+      .map((persona: any) => persona.persona_id)
+
+    const mediadores = expedientePersonas
+      .filter((persona: any) => persona.rol === "Mediador")
+      .map((persona: any) => persona.persona_id)
+
+    const peritos = expedientePersonas
+      .filter((persona: any) => persona.rol === "Perito")
+      .map((persona: any) => persona.persona_id)
+
+    return {
+      numero: initialData.numero || "",
+      numero_judicial: initialData.numero_judicial || "",
+      fecha_inicio: initialData.fecha_inicio || "",
+      fecha_inicio_judicial: initialData.fecha_inicio_judicial || "",
+      monto_total: initialData.monto_total || "",
+      juzgado_id: initialData.juzgado_id || "",
+      objeto: initialData.objeto || "",
+      autos: initialData.autos || "",
+      estados,
+      clientes,
+      abogados,
+      aseguradoras,
+      mediadores,
+      peritos,
+    }
+  }
+
   // Valores por defecto
-  const defaultValues: Partial<ExpedienteFormValues> = expediente
-    ? {
-        numero: expediente.numero,
-        numero_judicial: expediente.numero_judicial,
-        fecha_inicio: expediente.fecha_inicio,
-        fecha_inicio_judicial: expediente.fecha_inicio_judicial,
-        monto_total: expediente.monto_total,
-        juzgado_id: expediente.juzgado_id,
-        objeto: expediente.objeto,
-        autos: expediente.autos,
-        estados: expediente.expediente_estados?.map((estado: any) => estado.estado_id) || [],
-        clientes:
-          expediente.expediente_personas
-            ?.filter((persona: any) => persona.rol === "Cliente")
-            .map((persona: any) => persona.persona_id) || [],
-        abogados:
-          expediente.expediente_personas
-            ?.filter((persona: any) => persona.rol === "Abogado")
-            .map((persona: any) => persona.persona_id) || [],
-        aseguradoras:
-          expediente.expediente_personas
-            ?.filter((persona: any) => persona.rol === "Aseguradora")
-            .map((persona: any) => persona.persona_id) || [],
-        mediadores:
-          expediente.expediente_personas
-            ?.filter((persona: any) => persona.rol === "Mediador")
-            .map((persona: any) => persona.persona_id) || [],
-        peritos:
-          expediente.expediente_personas
-            ?.filter((persona: any) => persona.rol === "Perito")
-            .map((persona: any) => persona.persona_id) || [],
-      }
-    : {
-        numero: "",
-        numero_judicial: "",
-        fecha_inicio: "",
-        fecha_inicio_judicial: "",
-        monto_total: "",
-        juzgado_id: "",
-        objeto: "",
-        autos: "",
-        estados: [],
-        clientes: [],
-        abogados: [],
-        aseguradoras: [],
-        mediadores: [],
-        peritos: [],
-      }
+  const defaultValues = processInitialData()
 
   const form = useForm<ExpedienteFormValues>({
     resolver: zodResolver(expedienteSchema),
@@ -218,14 +219,16 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
         autos: data.autos,
       }
 
-      let expedienteId
+      let currentExpedienteId = initialData?.id || expedienteId
 
-      if (expediente) {
+      if (currentExpedienteId) {
         // Actualizar expediente existente
-        const { error: updateError } = await supabase.from("expedientes").update(expedienteData).eq("id", expediente.id)
+        const { error: updateError } = await supabase
+          .from("expedientes")
+          .update(expedienteData)
+          .eq("id", currentExpedienteId)
 
         if (updateError) throw updateError
-        expedienteId = expediente.id
       } else {
         // Crear nuevo expediente
         const { data: newExpediente, error: insertError } = await supabase
@@ -235,16 +238,16 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
           .single()
 
         if (insertError) throw insertError
-        expedienteId = newExpediente.id
+        currentExpedienteId = newExpediente.id
       }
 
       // 2. Actualizar relaciones en expediente_estados
       // Eliminar relaciones existentes
-      if (expediente) {
+      if (currentExpedienteId) {
         const { error: deleteEstadosError } = await supabase
           .from("expediente_estados")
           .delete()
-          .eq("expediente_id", expedienteId)
+          .eq("expediente_id", currentExpedienteId)
 
         if (deleteEstadosError) throw deleteEstadosError
       }
@@ -252,7 +255,7 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
       // Insertar nuevas relaciones
       if (data.estados && data.estados.length > 0) {
         const estadosData = data.estados.map((estadoId) => ({
-          expediente_id: expedienteId,
+          expediente_id: currentExpedienteId,
           estado_id: estadoId,
         }))
 
@@ -263,11 +266,11 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
 
       // 3. Actualizar relaciones en expediente_personas
       // Eliminar relaciones existentes
-      if (expediente) {
+      if (currentExpedienteId) {
         const { error: deletePersonasError } = await supabase
           .from("expediente_personas")
           .delete()
-          .eq("expediente_id", expedienteId)
+          .eq("expediente_id", currentExpedienteId)
 
         if (deletePersonasError) throw deletePersonasError
       }
@@ -284,7 +287,7 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
       for (const rol of roles) {
         if (rol.ids && rol.ids.length > 0) {
           const personasData = rol.ids.map((personaId) => ({
-            expediente_id: expedienteId,
+            expediente_id: currentExpedienteId,
             persona_id: personaId,
             rol: rol.tipo,
           }))
@@ -296,14 +299,14 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
       }
 
       toast({
-        title: expediente ? "Expediente actualizado" : "Expediente creado",
-        description: expediente
+        title: initialData ? "Expediente actualizado" : "Expediente creado",
+        description: initialData
           ? "El expediente ha sido actualizado correctamente"
           : "El expediente ha sido creado correctamente",
       })
 
       if (onSuccess) {
-        onSuccess(expedienteId)
+        onSuccess(currentExpedienteId)
       } else {
         router.push("/expedientes")
         router.refresh()
@@ -419,13 +422,14 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Juzgado</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value || ""} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar juzgado" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    <SelectItem value="none">Ninguno</SelectItem>
                     {formData.juzgados.map((juzgado) => (
                       <SelectItem key={juzgado.id} value={juzgado.id}>
                         {juzgado.nombre}
@@ -475,20 +479,34 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Estados</FormLabel>
-                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar estados" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
+                <FormControl>
+                  <div className="flex flex-wrap gap-2">
                     {formData.estados.map((estado) => (
-                      <SelectItem key={estado.id} value={estado.id}>
-                        {estado.nombre}
-                      </SelectItem>
+                      <div key={estado.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`estado-${estado.id}`}
+                          value={estado.id}
+                          checked={field.value?.includes(estado.id)}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            const isChecked = e.target.checked
+
+                            if (isChecked) {
+                              field.onChange([...(field.value || []), value])
+                            } else {
+                              field.onChange(field.value?.filter((val) => val !== value) || [])
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <label htmlFor={`estado-${estado.id}`} className="text-sm" style={{ color: estado.color }}>
+                          {estado.nombre}
+                        </label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -501,20 +519,34 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Clientes</FormLabel>
-                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar clientes" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
+                <FormControl>
+                  <div className="flex flex-wrap gap-2">
                     {formData.clientes.map((cliente) => (
-                      <SelectItem key={cliente.id} value={cliente.id}>
-                        {cliente.nombre}
-                      </SelectItem>
+                      <div key={cliente.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`cliente-${cliente.id}`}
+                          value={cliente.id}
+                          checked={field.value?.includes(cliente.id)}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            const isChecked = e.target.checked
+
+                            if (isChecked) {
+                              field.onChange([...(field.value || []), value])
+                            } else {
+                              field.onChange(field.value?.filter((val) => val !== value) || [])
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <label htmlFor={`cliente-${cliente.id}`} className="text-sm">
+                          {cliente.nombre}
+                        </label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -527,20 +559,34 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Abogados</FormLabel>
-                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar abogados" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
+                <FormControl>
+                  <div className="flex flex-wrap gap-2">
                     {formData.abogados.map((abogado) => (
-                      <SelectItem key={abogado.id} value={abogado.id}>
-                        {abogado.nombre}
-                      </SelectItem>
+                      <div key={abogado.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`abogado-${abogado.id}`}
+                          value={abogado.id}
+                          checked={field.value?.includes(abogado.id)}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            const isChecked = e.target.checked
+
+                            if (isChecked) {
+                              field.onChange([...(field.value || []), value])
+                            } else {
+                              field.onChange(field.value?.filter((val) => val !== value) || [])
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <label htmlFor={`abogado-${abogado.id}`} className="text-sm">
+                          {abogado.nombre}
+                        </label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -553,20 +599,34 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Aseguradoras</FormLabel>
-                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar aseguradoras" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
+                <FormControl>
+                  <div className="flex flex-wrap gap-2">
                     {formData.aseguradoras.map((aseguradora) => (
-                      <SelectItem key={aseguradora.id} value={aseguradora.id}>
-                        {aseguradora.nombre}
-                      </SelectItem>
+                      <div key={aseguradora.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`aseguradora-${aseguradora.id}`}
+                          value={aseguradora.id}
+                          checked={field.value?.includes(aseguradora.id)}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            const isChecked = e.target.checked
+
+                            if (isChecked) {
+                              field.onChange([...(field.value || []), value])
+                            } else {
+                              field.onChange(field.value?.filter((val) => val !== value) || [])
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <label htmlFor={`aseguradora-${aseguradora.id}`} className="text-sm">
+                          {aseguradora.nombre}
+                        </label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -579,20 +639,34 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Mediadores</FormLabel>
-                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar mediadores" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
+                <FormControl>
+                  <div className="flex flex-wrap gap-2">
                     {formData.mediadores.map((mediador) => (
-                      <SelectItem key={mediador.id} value={mediador.id}>
-                        {mediador.nombre}
-                      </SelectItem>
+                      <div key={mediador.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`mediador-${mediador.id}`}
+                          value={mediador.id}
+                          checked={field.value?.includes(mediador.id)}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            const isChecked = e.target.checked
+
+                            if (isChecked) {
+                              field.onChange([...(field.value || []), value])
+                            } else {
+                              field.onChange(field.value?.filter((val) => val !== value) || [])
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <label htmlFor={`mediador-${mediador.id}`} className="text-sm">
+                          {mediador.nombre}
+                        </label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -605,20 +679,34 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
             render={({ field }) => (
               <FormItem className="md:col-span-2">
                 <FormLabel>Peritos</FormLabel>
-                <Select multiple onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar peritos" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
+                <FormControl>
+                  <div className="flex flex-wrap gap-2">
                     {formData.peritos.map((perito) => (
-                      <SelectItem key={perito.id} value={perito.id}>
-                        {perito.nombre}
-                      </SelectItem>
+                      <div key={perito.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`perito-${perito.id}`}
+                          value={perito.id}
+                          checked={field.value?.includes(perito.id)}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            const isChecked = e.target.checked
+
+                            if (isChecked) {
+                              field.onChange([...(field.value || []), value])
+                            } else {
+                              field.onChange(field.value?.filter((val) => val !== value) || [])
+                            }
+                          }}
+                          className="mr-2"
+                        />
+                        <label htmlFor={`perito-${perito.id}`} className="text-sm">
+                          {perito.nombre}
+                        </label>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -630,7 +718,7 @@ export function ExpedienteForm({ expediente, onSuccess }: ExpedienteFormProps) {
             Cancelar
           </Button>
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Guardando..." : expediente ? "Actualizar" : "Guardar"}
+            {isSubmitting ? "Guardando..." : initialData ? "Actualizar" : "Guardar"}
           </Button>
         </div>
       </form>

@@ -13,6 +13,8 @@ export default function EditarExpedientePage({ params }: { params: { id: string 
   const router = useRouter()
   const supabase = createClientComponentClient()
   const [expediente, setExpediente] = useState<any>(null)
+  const [expedientePersonas, setExpedientePersonas] = useState<any[]>([])
+  const [expedienteEstados, setExpedienteEstados] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -22,33 +24,41 @@ export default function EditarExpedientePage({ params }: { params: { id: string 
       setError(null)
 
       try {
-        const { data, error: fetchError } = await supabase
+        // 1. Obtener datos básicos del expediente
+        const { data: expedienteData, error: expedienteError } = await supabase
           .from("expedientes")
-          .select(`
-            id,
-            numero,
-            fecha_inicio,
-            fecha_fin,
-            monto_total,
-            descripcion,
-            juzgado_id,
-            expediente_personas (
-              id,
-              rol,
-              persona_id
-            ),
-            expediente_estados (
-              id,
-              estado_id,
-              fecha
-            )
-          `)
+          .select("*")
           .eq("id", params.id)
           .single()
 
-        if (fetchError) throw fetchError
+        if (expedienteError) throw expedienteError
 
-        setExpediente(data)
+        // 2. Obtener personas relacionadas con el expediente
+        const { data: personasData, error: personasError } = await supabase
+          .from("expediente_personas")
+          .select("id, rol, persona_id")
+          .eq("expediente_id", params.id)
+
+        if (personasError) {
+          console.error("Error al cargar personas del expediente:", personasError)
+          // No lanzamos error para que la carga continúe
+        }
+
+        // 3. Obtener estados del expediente
+        const { data: estadosData, error: estadosError } = await supabase
+          .from("expediente_estados")
+          .select("id, estado_id, fecha_asignacion")
+          .eq("expediente_id", params.id)
+
+        if (estadosError) {
+          console.error("Error al cargar estados del expediente:", estadosError)
+          // No lanzamos error para que la carga continúe
+        }
+
+        // Establecer los datos
+        setExpediente(expedienteData)
+        setExpedientePersonas(personasData || [])
+        setExpedienteEstados(estadosData || [])
       } catch (err: any) {
         console.error("Error al cargar expediente:", err)
         setError(err.message || "Error al cargar el expediente")
@@ -102,6 +112,13 @@ export default function EditarExpedientePage({ params }: { params: { id: string 
     )
   }
 
+  // Preparar los datos para el formulario
+  const initialData = {
+    ...expediente,
+    expediente_personas: expedientePersonas,
+    expediente_estados: expedienteEstados,
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -119,7 +136,7 @@ export default function EditarExpedientePage({ params }: { params: { id: string 
         <CardContent>
           <ExpedienteForm
             expedienteId={params.id}
-            initialData={expediente}
+            initialData={initialData}
             onSuccess={() => router.push(`/expedientes/${params.id}`)}
           />
         </CardContent>

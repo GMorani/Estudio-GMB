@@ -17,8 +17,11 @@ export default function ExpedientePage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const supabase = createClientComponentClient()
   const [expediente, setExpediente] = useState<any>(null)
+  const [juzgado, setJuzgado] = useState<any>(null)
+  const [estados, setEstados] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expedienteColumns, setExpedienteColumns] = useState<string[]>([])
 
   useEffect(() => {
     async function fetchExpediente() {
@@ -26,20 +29,30 @@ export default function ExpedientePage({ params }: { params: { id: string } }) {
       setError(null)
 
       try {
+        // Primero, verificamos qué columnas existen en la tabla expedientes
+        const { data: columnsData, error: columnsError } = await supabase.from("expedientes").select("*").limit(1)
+
+        if (columnsError) throw columnsError
+
+        // Guardamos las columnas disponibles
+        if (columnsData && columnsData.length > 0) {
+          setExpedienteColumns(Object.keys(columnsData[0]))
+        }
+
+        // Construimos la consulta dinámicamente basada en las columnas disponibles
+        let query = "id, numero"
+
+        // Añadimos columnas solo si existen
+        if (expedienteColumns.includes("fecha_inicio")) query += ", fecha_inicio"
+        if (expedienteColumns.includes("monto_total")) query += ", monto_total"
+        if (expedienteColumns.includes("descripcion")) query += ", descripcion"
+        if (expedienteColumns.includes("juzgado_id")) query += ", juzgado_id"
+
+        // Consulta principal adaptativa
         const { data, error: fetchError } = await supabase
           .from("expedientes")
           .select(`
-            id,
-            numero,
-            fecha_inicio,
-            fecha_fin,
-            monto_total,
-            descripcion,
-            juzgado_id,
-            juzgados (
-              id,
-              nombre
-            ),
+            ${query},
             expediente_personas (
               id,
               rol,
@@ -50,16 +63,6 @@ export default function ExpedientePage({ params }: { params: { id: string } }) {
                 dni_cuit,
                 tipo_id
               )
-            ),
-            expediente_estados (
-              id,
-              estado_id,
-              fecha,
-              estados_expediente (
-                id,
-                nombre,
-                color
-              )
             )
           `)
           .eq("id", params.id)
@@ -68,6 +71,45 @@ export default function ExpedientePage({ params }: { params: { id: string } }) {
         if (fetchError) throw fetchError
 
         setExpediente(data)
+
+        // Consultas adicionales solo si es necesario
+        if (data) {
+          // Obtener los estados del expediente
+          const { data: estadosData, error: estadosError } = await supabase
+            .from("expediente_estados")
+            .select(`
+              id,
+              estado_id,
+              fecha_asignacion,
+              estados_expediente (
+                id,
+                nombre,
+                color
+              )
+            `)
+            .eq("expediente_id", data.id)
+
+          if (!estadosError && estadosData) {
+            setEstados(estadosData)
+          } else {
+            console.warn("No se pudieron cargar los estados del expediente:", estadosError)
+          }
+
+          // Obtener información del juzgado si existe
+          if (data.juzgado_id) {
+            const { data: juzgadoData, error: juzgadoError } = await supabase
+              .from("juzgados")
+              .select("*")
+              .eq("id", data.juzgado_id)
+              .single()
+
+            if (!juzgadoError) {
+              setJuzgado(juzgadoData)
+            } else {
+              console.warn("No se pudo cargar la información del juzgado:", juzgadoError)
+            }
+          }
+        }
       } catch (err: any) {
         console.error("Error al cargar expediente:", err)
         setError(err.message || "Error al cargar el expediente")
@@ -91,11 +133,12 @@ export default function ExpedientePage({ params }: { params: { id: string } }) {
   const abogados = getPersonasByRol("abogado")
 
   // Obtener el estado actual (el más reciente)
-  const estadoActual = expediente?.expediente_estados
-    ? [...expediente.expediente_estados].sort(
-        (a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime(),
-      )[0]?.estados_expediente
-    : null
+  const estadoActual =
+    estados.length > 0
+      ? [...estados].sort(
+          (a: any, b: any) => new Date(b.fecha_asignacion || 0).getTime() - new Date(a.fecha_asignacion || 0).getTime(),
+        )[0]?.estados_expediente
+      : null
 
   if (loading) {
     return (
@@ -143,6 +186,31 @@ export default function ExpedientePage({ params }: { params: { id: string } }) {
     )
   }
 
+  // Función para mostrar información del juzgado
+  const renderJuzgadoInfo = () => {
+    if (!expediente.juzgado_id) {
+      return "No asignado"
+    }
+
+    if (juzgado) {
+      // Mostrar la información disponible del juzgado
+      // Primero verificamos si existe una columna 'nombre'
+      if (juzgado.nombre) {
+        return juzgado.nombre
+      }
+      // Si no hay nombre, mostramos otra información disponible
+      else if (juzgado.descripcion) {
+        return juzgado.descripcion
+      }
+      // Si no hay información descriptiva, mostramos el ID
+      else {
+        return `Juzgado ID: ${juzgado.id}`
+      }
+    }
+
+    return `ID: ${expediente.juzgado_id}`
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -183,22 +251,34 @@ export default function ExpedientePage({ params }: { params: { id: string } }) {
                 <h3 className="text-sm font-medium text-muted-foreground">Número de expediente</h3>
                 <p className="text-lg">{expediente.numero}</p>
               </div>
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Fecha de inicio</h3>
-                <p className="text-lg">{formatDate(expediente.fecha_inicio)}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Fecha de finalización</h3>
-                <p className="text-lg">{formatDate(expediente.fecha_fin) || "En curso"}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Monto total</h3>
-                <p className="text-lg">{formatCurrency(expediente.monto_total)}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-muted-foreground">Juzgado</h3>
-                <p className="text-lg">{expediente.juzgados?.nombre || "No asignado"}</p>
-              </div>
+
+              {expedienteColumns.includes("fecha_inicio") && (
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Fecha de inicio</h3>
+                  <p className="text-lg">{formatDate(expediente.fecha_inicio)}</p>
+                </div>
+              )}
+
+              {expedienteColumns.includes("fecha_fin") && (
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Fecha de finalización</h3>
+                  <p className="text-lg">{formatDate(expediente.fecha_fin) || "En curso"}</p>
+                </div>
+              )}
+
+              {expedienteColumns.includes("monto_total") && (
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Monto total</h3>
+                  <p className="text-lg">{formatCurrency(expediente.monto_total)}</p>
+                </div>
+              )}
+
+              {expedienteColumns.includes("juzgado_id") && (
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Juzgado</h3>
+                  <p className="text-lg">{renderJuzgadoInfo()}</p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -247,16 +327,18 @@ export default function ExpedientePage({ params }: { params: { id: string } }) {
             </div>
           </div>
 
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">Descripción</h3>
-            <div className="rounded-md border p-4">
-              {expediente.descripcion ? (
-                <p className="whitespace-pre-wrap">{expediente.descripcion}</p>
-              ) : (
-                <p className="text-muted-foreground italic">Sin descripción</p>
-              )}
+          {expedienteColumns.includes("descripcion") && (
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Descripción</h3>
+              <div className="rounded-md border p-4">
+                {expediente.descripcion ? (
+                  <p className="whitespace-pre-wrap">{expediente.descripcion}</p>
+                ) : (
+                  <p className="text-muted-foreground italic">Sin descripción</p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
