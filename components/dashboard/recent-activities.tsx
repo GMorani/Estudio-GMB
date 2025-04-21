@@ -5,34 +5,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { formatDate } from "@/lib/utils"
-import { AlertCircle, CheckCircle2 } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
-export function ProximasTareas() {
-  const [tareas, setTareas] = useState([])
+export function RecentActivities() {
+  const [activities, setActivities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tableExists, setTableExists] = useState(true)
   const supabase = createClientComponentClient()
 
   useEffect(() => {
-    async function fetchTareas() {
+    async function fetchActivities() {
       try {
         setLoading(true)
 
-        // Verificar si la tabla tareas existe
-        const { error: tableCheckError } = await supabase.from("tareas").select("id").limit(1)
+        // Verificar si la tabla expedientes existe
+        const { error: tableCheckError } = await supabase.from("expedientes").select("id").limit(1)
 
         if (tableCheckError) {
           console.error("Error checking table:", tableCheckError)
           setTableExists(false)
-          setError("La tabla 'tareas' no existe en la base de datos.")
+          setError("La tabla 'expedientes' no existe en la base de datos.")
           setLoading(false)
           return
         }
 
         // Obtener una muestra para ver qué columnas están disponibles
-        const { data: sampleData, error: sampleError } = await supabase.from("tareas").select("*").limit(1)
+        const { data: sampleData, error: sampleError } = await supabase.from("expedientes").select("*").limit(1)
 
         if (sampleError) {
           console.error("Error fetching sample:", sampleError)
@@ -41,48 +41,59 @@ export function ProximasTareas() {
           return
         }
 
+        if (!sampleData || sampleData.length === 0) {
+          setActivities([])
+          setLoading(false)
+          return
+        }
+
         // Determinar qué columnas usar basado en lo que está disponible
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
+        const sample = sampleData[0]
+        console.log("Columnas disponibles:", Object.keys(sample))
+
+        // Determinar qué columna usar para ordenar
+        let orderColumn = "id"
+        if ("fecha_alta" in sample) orderColumn = "fecha_alta"
+        else if ("created_at" in sample) orderColumn = "created_at"
 
         // Construir la consulta
         const { data, error } = await supabase
-          .from("tareas")
-          .select("*, expedientes(*)")
-          .eq("cumplida", false)
-          .order("fecha_vencimiento", { ascending: true })
+          .from("expedientes")
+          .select("*")
+          .order(orderColumn, { ascending: false })
           .limit(5)
 
         if (error) {
-          console.error("Error fetching tareas:", error)
+          console.error("Error fetching activities:", error)
           setError(error.message)
         } else {
-          setTareas(data || [])
+          setActivities(data || [])
         }
       } catch (err) {
-        console.error("Error fetching tareas:", err)
+        console.error("Error fetching activities:", err)
         setError(err.message)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchTareas()
+    fetchActivities()
   }, [supabase])
 
   if (!tableExists) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Próximas Tareas</CardTitle>
-          <CardDescription>Tareas pendientes más urgentes</CardDescription>
+          <CardTitle>Actividad Reciente</CardTitle>
+          <CardDescription>Las últimas actualizaciones de expedientes</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
-              La tabla 'tareas' no existe en la base de datos. Por favor, cree la tabla para ver las próximas tareas.
+              La tabla 'expedientes' no existe en la base de datos. Por favor, cree la tabla para ver la actividad
+              reciente.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -94,8 +105,8 @@ export function ProximasTareas() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Próximas Tareas</CardTitle>
-          <CardDescription>Tareas pendientes más urgentes</CardDescription>
+          <CardTitle>Actividad Reciente</CardTitle>
+          <CardDescription>Las últimas actualizaciones de expedientes</CardDescription>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
@@ -111,8 +122,8 @@ export function ProximasTareas() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Próximas Tareas</CardTitle>
-        <CardDescription>Tareas pendientes más urgentes</CardDescription>
+        <CardTitle>Actividad Reciente</CardTitle>
+        <CardDescription>Las últimas actualizaciones de expedientes</CardDescription>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -127,40 +138,28 @@ export function ProximasTareas() {
               </div>
             ))}
           </div>
-        ) : tareas.length === 0 ? (
-          <Alert>
-            <CheckCircle2 className="h-4 w-4" />
-            <AlertTitle>¡Todo al día!</AlertTitle>
-            <AlertDescription>No hay tareas pendientes en este momento.</AlertDescription>
-          </Alert>
+        ) : activities.length === 0 ? (
+          <p className="text-muted-foreground">No hay actividad reciente.</p>
         ) : (
           <div className="space-y-4">
-            {tareas.map((tarea) => {
-              const fechaVencimiento = new Date(tarea.fecha_vencimiento)
-              const today = new Date()
-              today.setHours(0, 0, 0, 0)
-              const isOverdue = fechaVencimiento < today
-
-              // Obtener información del expediente si está disponible
-              const expedienteInfo = tarea.expedientes
-                ? `Exp. #${tarea.expedientes.numero || tarea.expedientes.referencia || tarea.expedientes.id || "N/A"}`
-                : "Sin expediente"
+            {activities.map((activity) => {
+              // Determinar qué campos usar
+              const id = activity.id || "N/A"
+              const numero = activity.numero || activity.referencia || id
+              const fecha = activity.fecha_alta || activity.created_at || "Fecha desconocida"
+              const estado = activity.estado || "Estado desconocido"
 
               return (
-                <div key={tarea.id} className="flex items-start space-x-4 border-b pb-4 last:border-0">
+                <div key={id} className="flex items-start space-x-4 border-b pb-4 last:border-0">
                   <div className="flex-1">
-                    <p className="font-medium">{tarea.descripcion || "Sin descripción"}</p>
+                    <p className="font-medium">Expediente #{numero}</p>
                     <p className="text-sm text-muted-foreground">
-                      {expedienteInfo} - Vence: {formatDate(tarea.fecha_vencimiento)}
+                      {typeof fecha === "string" ? fecha : formatDate(fecha)}
                     </p>
                   </div>
                   <div>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        isOverdue ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800"
-                      }`}
-                    >
-                      {isOverdue ? "Vencida" : "Pendiente"}
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-800">
+                      {estado}
                     </span>
                   </div>
                 </div>
@@ -173,4 +172,4 @@ export function ProximasTareas() {
   )
 }
 
-export default ProximasTareas
+export default RecentActivities
