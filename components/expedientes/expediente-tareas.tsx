@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { DatePicker } from "@/components/ui/date-picker"
 import { useToast } from "@/components/ui/use-toast"
 import { formatDate } from "@/lib/utils"
-import { PlusCircle, Loader2 } from "lucide-react"
+import { PlusCircle, Loader2, CheckCircle } from "lucide-react"
 
 type Tarea = {
   id: number
@@ -22,9 +22,10 @@ type Tarea = {
 type ExpedienteTareasProps = {
   expedienteId: string
   tareas: Tarea[]
+  onTareaCompletada?: (nuevaActividad: { id: number; descripcion: string; fecha: string; automatica: boolean }) => void
 }
 
-export function ExpedienteTareas({ expedienteId, tareas }: ExpedienteTareasProps) {
+export function ExpedienteTareas({ expedienteId, tareas, onTareaCompletada }: ExpedienteTareasProps) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
@@ -51,17 +52,29 @@ export function ExpedienteTareas({ expedienteId, tareas }: ExpedienteTareasProps
       if (updateError) throw updateError
 
       // 2. Registrar la actividad
-      const { error: actividadError } = await supabase.from("actividades_expediente").insert({
-        expediente_id: expedienteId,
-        descripcion: `Tarea cumplida - ${descripcion}`,
-        fecha: new Date().toISOString(),
-        automatica: true,
-      })
+      const actividadDescripcion = `Tarea cumplida - ${descripcion}`
+      const fechaActual = new Date().toISOString()
+
+      const { data: actividadData, error: actividadError } = await supabase
+        .from("actividades_expediente")
+        .insert({
+          expediente_id: expedienteId,
+          descripcion: actividadDescripcion,
+          fecha: fechaActual,
+          automatica: true,
+        })
+        .select()
+        .single()
 
       if (actividadError) throw actividadError
 
       // 3. Actualizar el estado local
       setTareasState((prevTareas) => prevTareas.filter((tarea) => tarea.id !== tareaId))
+
+      // 4. Notificar al componente de actividades sobre la nueva actividad
+      if (onTareaCompletada && actividadData) {
+        onTareaCompletada(actividadData)
+      }
 
       toast({
         title: "Tarea completada",
@@ -111,12 +124,26 @@ export function ExpedienteTareas({ expedienteId, tareas }: ExpedienteTareasProps
       setTareasState((prevTareas) => [...prevTareas, data])
 
       // Registrar la actividad
-      await supabase.from("actividades_expediente").insert({
-        expediente_id: expedienteId,
-        descripcion: `Nueva tarea creada - ${nuevaTarea.descripcion}`,
-        fecha: new Date().toISOString(),
-        automatica: true,
-      })
+      const actividadDescripcion = `Nueva tarea creada - ${nuevaTarea.descripcion}`
+      const fechaActual = new Date().toISOString()
+
+      const { data: actividadData, error: actividadError } = await supabase
+        .from("actividades_expediente")
+        .insert({
+          expediente_id: expedienteId,
+          descripcion: actividadDescripcion,
+          fecha: fechaActual,
+          automatica: true,
+        })
+        .select()
+        .single()
+
+      if (actividadError) throw actividadError
+
+      // Notificar al componente de actividades sobre la nueva actividad
+      if (onTareaCompletada && actividadData) {
+        onTareaCompletada(actividadData)
+      }
 
       // Limpiar el formulario
       setNuevaTarea({
@@ -225,12 +252,20 @@ export function ExpedienteTareas({ expedienteId, tareas }: ExpedienteTareasProps
                     </p>
                   </div>
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     disabled={isLoading[tarea.id]}
                     onClick={() => completarTarea(tarea.id, tarea.descripcion)}
+                    className="bg-green-600 hover:bg-green-700 text-white"
                   >
-                    {isLoading[tarea.id] ? "Procesando..." : "Completar"}
+                    {isLoading[tarea.id] ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Completar
+                      </>
+                    )}
                   </Button>
                 </div>
               )
