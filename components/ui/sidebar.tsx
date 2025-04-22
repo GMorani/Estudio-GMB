@@ -16,6 +16,9 @@ import {
   UserRound,
   Briefcase,
   CheckSquare,
+  ChevronDown,
+  BookOpen,
+  UserCog,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -205,10 +208,19 @@ export const SidebarTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHT
 )
 SidebarTrigger.displayName = "SidebarTrigger"
 
+type Route = {
+  label: string
+  icon: React.ElementType
+  href?: string
+  color: string
+  children?: Omit<Route, "children">[]
+}
+
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname()
+  const [expandedItem, setExpandedItem] = React.useState<string | null>("Personas") // Expanded by default
 
-  const routes = [
+  const routes: Route[] = [
     {
       label: "Dashboard",
       icon: LayoutDashboard,
@@ -230,32 +242,51 @@ export function Sidebar({ className }: { className?: string }) {
     {
       label: "Personas",
       icon: Users,
-      href: "/personas",
       color: "text-orange-500",
-    },
-    {
-      label: "Clientes",
-      icon: UserRound,
-      href: "/clientes",
-      color: "text-emerald-500",
-    },
-    {
-      label: "Abogados",
-      icon: Briefcase,
-      href: "/abogados",
-      color: "text-blue-500",
-    },
-    {
-      label: "Aseguradoras",
-      icon: Building2,
-      href: "/aseguradoras",
-      color: "text-red-500",
-    },
-    {
-      label: "Juzgados",
-      icon: Scale,
-      href: "/juzgados",
-      color: "text-yellow-500",
+      children: [
+        {
+          label: "Clientes",
+          icon: UserRound,
+          href: "/clientes",
+          color: "text-emerald-500",
+        },
+        {
+          label: "Abogados",
+          icon: Briefcase,
+          href: "/abogados",
+          color: "text-blue-500",
+        },
+        {
+          label: "Aseguradoras",
+          icon: Building2,
+          href: "/aseguradoras",
+          color: "text-red-500",
+        },
+        {
+          label: "Juzgados",
+          icon: Scale,
+          href: "/juzgados",
+          color: "text-yellow-500",
+        },
+        {
+          label: "Mediadores",
+          icon: BookOpen,
+          href: "/mediadores",
+          color: "text-purple-500",
+        },
+        {
+          label: "Peritos",
+          icon: UserCog,
+          href: "/peritos",
+          color: "text-indigo-500",
+        },
+        {
+          label: "Todas las Personas",
+          icon: Users,
+          href: "/personas",
+          color: "text-orange-500",
+        },
+      ],
     },
     {
       label: "Calendario",
@@ -271,25 +302,77 @@ export function Sidebar({ className }: { className?: string }) {
     },
   ]
 
+  const toggleExpand = (label: string) => {
+    setExpandedItem(expandedItem === label ? null : label)
+  }
+
+  const isChildActive = (route: Route) => {
+    if (!route.children) return false
+    return route.children.some((child) => child.href === pathname)
+  }
+
   return (
     <div className={cn("pb-12", className)}>
       <div className="space-y-4 py-4">
         <div className="px-3 py-2">
           <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Estudio GMB</h2>
           <div className="space-y-1">
-            {routes.map((route) => (
-              <Button
-                key={route.href}
-                variant={pathname === route.href ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                asChild
-              >
-                <Link href={route.href} prefetch={false}>
-                  <route.icon className={cn("mr-2 h-4 w-4", route.color)} />
-                  {route.label}
-                </Link>
-              </Button>
-            ))}
+            {routes.map((route) => {
+              // Si la ruta tiene hijos, renderizamos un botón desplegable
+              if (route.children) {
+                const isActive = isChildActive(route)
+                const isExpanded = expandedItem === route.label
+
+                return (
+                  <div key={route.label} className="space-y-1">
+                    <Button
+                      variant={isActive ? "secondary" : "ghost"}
+                      className="w-full justify-between"
+                      onClick={() => toggleExpand(route.label)}
+                    >
+                      <div className="flex items-center">
+                        <route.icon className={cn("mr-2 h-4 w-4", route.color)} />
+                        {route.label}
+                      </div>
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded ? "rotate-180" : "")} />
+                    </Button>
+
+                    {isExpanded && (
+                      <div className="pl-6 space-y-1 mt-1">
+                        {route.children.map((child) => (
+                          <Button
+                            key={child.href}
+                            variant={pathname === child.href ? "secondary" : "ghost"}
+                            className="w-full justify-start"
+                            asChild
+                          >
+                            <Link href={child.href || "#"} prefetch={false}>
+                              <child.icon className={cn("mr-2 h-4 w-4", child.color)} />
+                              {child.label}
+                            </Link>
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              // Si la ruta no tiene hijos, renderizamos un botón normal
+              return (
+                <Button
+                  key={route.href}
+                  variant={pathname === route.href ? "secondary" : "ghost"}
+                  className="w-full justify-start"
+                  asChild
+                >
+                  <Link href={route.href || "#"} prefetch={false}>
+                    <route.icon className={cn("mr-2 h-4 w-4", route.color)} />
+                    {route.label}
+                  </Link>
+                </Button>
+              )
+            })}
           </div>
         </div>
       </div>
