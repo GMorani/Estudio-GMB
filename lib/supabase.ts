@@ -1,23 +1,30 @@
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import type { Database } from "@/types/supabase"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 
-// Exportar createClient como alias de createClientComponentClient para compatibilidad
-export const createClient = createClientComponentClient
+// Crear cliente de Supabase para componentes del servidor
+export function createClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-// Implementación del patrón singleton para el cliente de Supabase
-let supabaseInstance: ReturnType<typeof createClientComponentClient<Database>> | null = null
-
-export const getSupabaseClient = () => {
-  if (!supabaseInstance) {
-    supabaseInstance = createClientComponentClient<Database>()
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase environment variables")
   }
-  return supabaseInstance
+
+  return createSupabaseClient(supabaseUrl, supabaseKey)
 }
 
-// Cliente para uso en el servidor
-export const createServerSupabaseClient = async () => {
-  const { createServerComponentClient } = await import("@supabase/auth-helpers-nextjs")
-  const { cookies } = await import("next/headers")
+// Crear cliente de Supabase para componentes del cliente
+let clientSingleton: ReturnType<typeof createSupabaseClient> | null = null
 
-  return createServerComponentClient<Database>({ cookies })
+export function createClientClient() {
+  if (clientSingleton) return clientSingleton
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase environment variables")
+  }
+
+  clientSingleton = createSupabaseClient(supabaseUrl, supabaseKey)
+  return clientSingleton
 }
