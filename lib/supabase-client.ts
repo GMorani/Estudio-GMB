@@ -1,8 +1,22 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { cookies } from "next/headers"
 import type { Database } from "@/types/supabase"
 
-// Exportar createClient como alias de createClientComponentClient para compatibilidad
-export const createClient = createClientComponentClient
+// Función para crear un cliente de Supabase para componentes del servidor
+export function createClient() {
+  try {
+    return createServerComponentClient({ cookies })
+  } catch (error) {
+    console.error("Error al crear el cliente de Supabase:", error)
+    throw error
+  }
+}
+
+// Función para crear un cliente de Supabase para componentes del cliente
+export function createClientClient() {
+  return createClientComponentClient()
+}
 
 // Función para crear un cliente de Supabase con manejo de errores y limitación de tasa
 export function createSupabaseClient() {

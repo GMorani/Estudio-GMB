@@ -59,7 +59,7 @@ export function PeritosTable({ peritos: initialPeritos }: { peritos: Perito[] })
         title: "Perito eliminado",
         description: "El perito ha sido eliminado correctamente",
       })
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al eliminar perito:", error)
       toast({
         title: "Error",

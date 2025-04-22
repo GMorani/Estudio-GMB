@@ -9,13 +9,10 @@ export const dynamic = "force-dynamic"
 export default async function PeritosPage() {
   const supabase = createClient()
 
-  // Obtener todos los peritos
-  const { data: peritos, error } = await supabase
-    .from("peritos")
-    .select("*")
-    .order("nombre", { ascending: true })
-    .catch(() => ({ data: null, error: { message: "Error al cargar peritos" } }))
+  // Obtener todos los peritos - Corregido para manejar errores correctamente
+  const { data: peritos, error } = await supabase.from("peritos").select("*").order("nombre", { ascending: true })
 
+  // Manejo de errores después de la consulta
   const hasPeritos = peritos && peritos.length > 0
 
   return (
