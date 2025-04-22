@@ -95,22 +95,19 @@ export function Sidebar({ className }: { className?: string }) {
         <div className="px-3 py-2">
           <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Estudio GMB</h2>
           <div className="space-y-1">
-            {routes.map((route) => {
-              const Icon = route.icon
-              return (
-                <Button
-                  key={route.href}
-                  variant={pathname === route.href ? "secondary" : "ghost"}
-                  className="w-full justify-start"
-                  asChild
-                >
-                  <Link href={route.href} prefetch={false}>
-                    <Icon className={cn("mr-2 h-4 w-4", route.color)} />
-                    {route.label}
-                  </Link>
-                </Button>
-              )
-            })}
+            {routes.map((route) => (
+              <Button
+                key={route.href}
+                variant={pathname === route.href ? "secondary" : "ghost"}
+                className="w-full justify-start"
+                asChild
+              >
+                <Link href={route.href} prefetch={true}>
+                  <route.icon className={cn("mr-2 h-4 w-4", route.color)} />
+                  {route.label}
+                </Link>
+              </Button>
+            ))}
           </div>
         </div>
       </div>

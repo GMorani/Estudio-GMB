@@ -1,18 +1,23 @@
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "@/types/supabase"
 
-// Implementación de patrón singleton para el cliente de Supabase en el lado del cliente
+// Exportar createClient como alias de createClientComponentClient para compatibilidad
+export const createClient = createClientComponentClient
+
+// Implementación del patrón singleton para el cliente de Supabase
 let supabaseInstance: ReturnType<typeof createClientComponentClient<Database>> | null = null
 
-export function getSupabaseClient() {
+export const getSupabaseClient = () => {
   if (!supabaseInstance) {
     supabaseInstance = createClientComponentClient<Database>()
   }
   return supabaseInstance
 }
 
-// Exportar el cliente de Supabase como una exportación nombrada
-export const supabase = getSupabaseClient()
+// Cliente para uso en el servidor
+export const createServerSupabaseClient = async () => {
+  const { createServerComponentClient } = await import("@supabase/auth-helpers-nextjs")
+  const { cookies } = await import("next/headers")
 
-// Exportar la función createClient como se requiere
-export const createClient = createClientComponentClient
+  return createServerComponentClient<Database>({ cookies })
+}

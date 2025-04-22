@@ -1,100 +1,87 @@
-"use client"
-
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { useToast } from "@/components/ui/use-toast"
+import type { Database } from "@/types/supabase"
 
-// Mapa para rastrear las solicitudes por ruta
-const requestsMap = new Map<string, number>()
-const MAX_REQUESTS_PER_ROUTE = 5 // Máximo número de solicitudes por ruta en un período de tiempo
-const RATE_LIMIT_WINDOW = 5000 // Ventana de tiempo en ms (5 segundos)
+// Exportar createClient como alias de createClientComponentClient para compatibilidad
+export const createClient = createClientComponentClient
 
-// Función para verificar si una ruta ha excedido el límite de solicitudes
-function isRateLimited(route: string): boolean {
-  const now = Date.now()
-  const routeRequests = requestsMap.get(route) || 0
+// Función para crear un cliente de Supabase con manejo de errores y limitación de tasa
+export function createSupabaseClient() {
+  const supabase = createClientComponentClient<Database>()
 
-  if (routeRequests >= MAX_REQUESTS_PER_ROUTE) {
-    return true
-  }
+  // Contador de solicitudes para limitación de tasa
+  let requestCount = 0
+  const maxRequestsPerMinute = 100
+  let lastResetTime = Date.now()
 
-  // Incrementar el contador de solicitudes
-  requestsMap.set(route, routeRequests + 1)
-
-  // Restablecer el contador después de la ventana de tiempo
-  setTimeout(() => {
-    const currentRequests = requestsMap.get(route) || 0
-    requestsMap.set(route, Math.max(0, currentRequests - 1))
-  }, RATE_LIMIT_WINDOW)
-
-  return false
-}
-
-// Cliente de Supabase con manejo de errores y limitación de tasa
-export function useSupabaseClient() {
-  const supabase = createClientComponentClient()
-  const { toast } = useToast()
-
-  // Función para realizar consultas con manejo de errores y limitación de tasa
-  async function query<T>(
-    route: string,
-    queryFn: () => Promise<{ data: T | null; error: any }>,
-  ): Promise<{ data: T | null; error: any }> {
-    // Verificar si la ruta ha excedido el límite de solicitudes
-    if (isRateLimited(route)) {
-      toast({
-        title: "Demasiadas solicitudes",
-        description: "Por favor, espera un momento antes de intentar nuevamente.",
-        variant: "destructive",
-      })
-
-      return {
-        data: null,
-        error: new Error("Too many requests. Please try again later."),
-      }
+  // Función para verificar la limitación de tasa
+  const checkRateLimit = () => {
+    const now = Date.now()
+    if (now - lastResetTime > 60000) {
+      // Reiniciar contador cada minuto
+      requestCount = 0
+      lastResetTime = now
     }
 
-    try {
-      const result = await queryFn()
+    if (requestCount >= maxRequestsPerMinute) {
+      throw new Error("Rate limit exceeded. Please try again later.")
+    }
 
-      if (result.error) {
-        // Manejar errores específicos
-        if (result.error.message && result.error.message.includes("Too Many")) {
-          toast({
-            title: "Límite de solicitudes excedido",
-            description: "El servidor está ocupado. Por favor, intenta nuevamente en unos momentos.",
-            variant: "destructive",
-          })
-        } else {
-          toast({
-            title: "Error",
-            description: "Ocurrió un error al procesar la solicitud.",
-            variant: "destructive",
-          })
+    requestCount++
+  }
+
+  // Envoltorio para métodos de Supabase con manejo de errores
+  return {
+    from: (table: string) => {
+      checkRateLimit()
+
+      const query = supabase.from(table)
+
+      // Envolver métodos con manejo de errores
+      const originalSelect = query.select.bind(query)
+      query.select = (...args: any[]) => {
+        try {
+          return originalSelect(...args)
+        } catch (error) {
+          console.error(`Error in select operation on ${table}:`, error)
+          throw error
         }
       }
 
-      return result
-    } catch (error: any) {
-      console.error(`Error en la consulta ${route}:`, error)
-
-      toast({
-        title: "Error",
-        description: "Ocurrió un error inesperado. Por favor, intenta nuevamente.",
-        variant: "destructive",
-      })
-
-      return {
-        data: null,
-        error,
+      const originalInsert = query.insert.bind(query)
+      query.insert = (...args: any[]) => {
+        try {
+          return originalInsert(...args)
+        } catch (error) {
+          console.error(`Error in insert operation on ${table}:`, error)
+          throw error
+        }
       }
-    }
-  }
 
-  return {
-    ...supabase,
-    safeQuery: query,
+      const originalUpdate = query.update.bind(query)
+      query.update = (...args: any[]) => {
+        try {
+          return originalUpdate(...args)
+        } catch (error) {
+          console.error(`Error in update operation on ${table}:`, error)
+          throw error
+        }
+      }
+
+      const originalDelete = query.delete.bind(query)
+      query.delete = (...args: any[]) => {
+        try {
+          return originalDelete(...args)
+        } catch (error) {
+          console.error(`Error in delete operation on ${table}:`, error)
+          throw error
+        }
+      }
+
+      return query
+    },
+    // Exponer otros métodos de supabase según sea necesario
+    auth: supabase.auth,
+    storage: supabase.storage,
+    rpc: supabase.rpc,
   }
 }
-
-// Exportar la función createClient como se requiere
-export const createClient = createClientComponentClient
