@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
 import { DayPicker } from "react-day-picker"
 import { es } from "date-fns/locale"
 import { format, addMonths, subMonths } from "date-fns"
@@ -74,7 +73,7 @@ function Calendar({
     setCurrentMonth(newMonth)
   }
 
-  // Custom caption component with month/year selectors
+  // Simplified custom caption component
   const CustomCaption = ({ displayMonth }: { displayMonth: Date }) => {
     // Generate years array (current year ± 10 years)
     const currentYear = displayMonth.getFullYear()
@@ -101,8 +100,8 @@ function Calendar({
 
     return (
       <div className="flex items-center justify-between w-full px-2">
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={goToPreviousMonth} aria-label="Mes anterior">
-          <ChevronLeft className="h-4 w-4" />
+        <Button variant="outline" size="sm" onClick={goToPreviousMonth} className="h-7 w-7">
+          <span>←</span>
         </Button>
 
         <div className="flex items-center gap-2">
@@ -110,7 +109,6 @@ function Calendar({
             value={displayMonth.getMonth()}
             onChange={handleMonthChange}
             className="h-8 px-2 py-1 rounded border border-input bg-background text-sm"
-            aria-label="Seleccionar mes"
           >
             {months.map((month) => (
               <option key={month.value} value={month.value}>
@@ -123,7 +121,6 @@ function Calendar({
             value={displayMonth.getFullYear()}
             onChange={handleYearChange}
             className="h-8 px-2 py-1 rounded border border-input bg-background text-sm"
-            aria-label="Seleccionar año"
           >
             {years.map((year) => (
               <option key={year} value={year}>
@@ -133,8 +130,8 @@ function Calendar({
           </select>
         </div>
 
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={goToNextMonth} aria-label="Mes siguiente">
-          <ChevronRight className="h-4 w-4" />
+        <Button variant="outline" size="sm" onClick={goToNextMonth} className="h-7 w-7">
+          <span>→</span>
         </Button>
       </div>
     )

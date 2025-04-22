@@ -2,36 +2,11 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import {
-  LayoutDashboard,
-  Users,
-  FileText,
-  Calendar,
-  Settings,
-  Building2,
-  Scale,
-  UserRound,
-  Briefcase,
-  CheckSquare,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname()
-
-  // Definir los iconos como componentes separados para evitar problemas de JSX
-  const DashboardIcon = LayoutDashboard
-  const ExpedientesIcon = FileText
-  const TareasIcon = CheckSquare
-  const ClientesIcon = UserRound
-  const AbogadosIcon = Briefcase
-  const AseguradorasIcon = Building2
-  const JuzgadosIcon = Scale
-  const PeritosIcon = UserRound
-  const MediadoresIcon = Users
-  const CalendarioIcon = Calendar
-  const ConfiguracionIcon = Settings
 
   return (
     <div className={cn("pb-12", className)}>
@@ -45,7 +20,7 @@ export function Sidebar({ className }: { className?: string }) {
               asChild
             >
               <Link href="/dashboard">
-                <DashboardIcon className="mr-2 h-4 w-4 text-sky-500" />
+                <span className="mr-2 h-4 w-4 text-sky-500">📊</span>
                 Dashboard
               </Link>
             </Button>
@@ -56,28 +31,28 @@ export function Sidebar({ className }: { className?: string }) {
               asChild
             >
               <Link href="/expedientes">
-                <ExpedientesIcon className="mr-2 h-4 w-4 text-violet-500" />
+                <span className="mr-2 h-4 w-4 text-violet-500">📄</span>
                 Expedientes
               </Link>
             </Button>
 
             <Button variant={pathname === "/tareas" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/tareas">
-                <TareasIcon className="mr-2 h-4 w-4 text-pink-500" />
+                <span className="mr-2 h-4 w-4 text-pink-500">✓</span>
                 Tareas
               </Link>
             </Button>
 
             <Button variant={pathname === "/clientes" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/clientes">
-                <ClientesIcon className="mr-2 h-4 w-4 text-emerald-500" />
+                <span className="mr-2 h-4 w-4 text-emerald-500">👤</span>
                 Clientes
               </Link>
             </Button>
 
             <Button variant={pathname === "/abogados" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/abogados">
-                <AbogadosIcon className="mr-2 h-4 w-4 text-blue-500" />
+                <span className="mr-2 h-4 w-4 text-blue-500">💼</span>
                 Abogados
               </Link>
             </Button>
@@ -88,21 +63,21 @@ export function Sidebar({ className }: { className?: string }) {
               asChild
             >
               <Link href="/aseguradoras">
-                <AseguradorasIcon className="mr-2 h-4 w-4 text-red-500" />
+                <span className="mr-2 h-4 w-4 text-red-500">🏢</span>
                 Aseguradoras
               </Link>
             </Button>
 
             <Button variant={pathname === "/juzgados" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/juzgados">
-                <JuzgadosIcon className="mr-2 h-4 w-4 text-yellow-500" />
+                <span className="mr-2 h-4 w-4 text-yellow-500">⚖️</span>
                 Juzgados
               </Link>
             </Button>
 
             <Button variant={pathname === "/peritos" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/peritos">
-                <PeritosIcon className="mr-2 h-4 w-4 text-purple-500" />
+                <span className="mr-2 h-4 w-4 text-purple-500">🔍</span>
                 Peritos
               </Link>
             </Button>
@@ -113,7 +88,7 @@ export function Sidebar({ className }: { className?: string }) {
               asChild
             >
               <Link href="/mediadores">
-                <MediadoresIcon className="mr-2 h-4 w-4 text-indigo-500" />
+                <span className="mr-2 h-4 w-4 text-indigo-500">👥</span>
                 Mediadores
               </Link>
             </Button>
@@ -124,7 +99,7 @@ export function Sidebar({ className }: { className?: string }) {
               asChild
             >
               <Link href="/calendario">
-                <CalendarioIcon className="mr-2 h-4 w-4 text-green-500" />
+                <span className="mr-2 h-4 w-4 text-green-500">📅</span>
                 Calendario
               </Link>
             </Button>
@@ -135,7 +110,7 @@ export function Sidebar({ className }: { className?: string }) {
               asChild
             >
               <Link href="/configuracion">
-                <ConfiguracionIcon className="mr-2 h-4 w-4 text-gray-500" />
+                <span className="mr-2 h-4 w-4 text-gray-500">⚙️</span>
                 Configuración
               </Link>
             </Button>

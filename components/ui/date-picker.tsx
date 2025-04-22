@@ -1,7 +1,7 @@
 "use client"
+
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { CalendarIcon } from "lucide-react"
 import { useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -33,11 +33,11 @@ export function DatePicker({ date, setDate, className, disabled }: DatePickerPro
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant={"outline"}
+          variant="outline"
           className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground", className)}
           disabled={disabled}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
+          <span className="mr-2">📅</span>
           {date ? format(date, "dd/MM/yyyy", { locale: es }) : <span>Seleccionar fecha</span>}
         </Button>
       </PopoverTrigger>
