@@ -2,13 +2,12 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { PlusCircle } from "lucide-react"
 import { MediadoresTable } from "@/components/mediadores/mediadores-table"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase-client"
 
 export const dynamic = "force-dynamic"
 
 export default async function MediadoresPage() {
-  const supabase = createServerComponentClient({ cookies })
+  const supabase = createClient()
 
   // Obtener todos los mediadores
   const { data: mediadores, error } = await supabase.from("mediadores").select("*").order("nombre", { ascending: true })

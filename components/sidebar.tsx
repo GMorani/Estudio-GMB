@@ -2,6 +2,8 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
   Users,
@@ -15,20 +17,16 @@ import {
   CheckSquare,
   Search,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 
 export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname()
 
-  // Definir los elementos de navegación directamente sin usar un array
   return (
     <div className={cn("pb-12", className)}>
       <div className="space-y-4 py-4">
         <div className="px-3 py-2">
           <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Estudio GMB</h2>
           <div className="space-y-1">
-            {/* Dashboard */}
             <Button
               variant={pathname === "/dashboard" ? "secondary" : "ghost"}
               className="w-full justify-start"
@@ -40,7 +38,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Expedientes */}
             <Button
               variant={pathname === "/expedientes" ? "secondary" : "ghost"}
               className="w-full justify-start"
@@ -52,7 +49,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Tareas */}
             <Button variant={pathname === "/tareas" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/tareas">
                 <CheckSquare className="mr-2 h-4 w-4 text-pink-500" />
@@ -60,7 +56,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Clientes */}
             <Button variant={pathname === "/clientes" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/clientes">
                 <UserRound className="mr-2 h-4 w-4 text-emerald-500" />
@@ -68,7 +63,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Abogados */}
             <Button variant={pathname === "/abogados" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/abogados">
                 <Briefcase className="mr-2 h-4 w-4 text-blue-500" />
@@ -76,7 +70,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Aseguradoras */}
             <Button
               variant={pathname === "/aseguradoras" ? "secondary" : "ghost"}
               className="w-full justify-start"
@@ -88,7 +81,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Juzgados */}
             <Button variant={pathname === "/juzgados" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/juzgados">
                 <Scale className="mr-2 h-4 w-4 text-yellow-500" />
@@ -96,7 +88,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Peritos */}
             <Button variant={pathname === "/peritos" ? "secondary" : "ghost"} className="w-full justify-start" asChild>
               <Link href="/peritos">
                 <Search className="mr-2 h-4 w-4 text-purple-500" />
@@ -104,7 +95,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Mediadores */}
             <Button
               variant={pathname === "/mediadores" ? "secondary" : "ghost"}
               className="w-full justify-start"
@@ -116,7 +106,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Calendario */}
             <Button
               variant={pathname === "/calendario" ? "secondary" : "ghost"}
               className="w-full justify-start"
@@ -128,7 +117,6 @@ export function Sidebar({ className }: { className?: string }) {
               </Link>
             </Button>
 
-            {/* Configuración */}
             <Button
               variant={pathname === "/configuracion" ? "secondary" : "ghost"}
               className="w-full justify-start"

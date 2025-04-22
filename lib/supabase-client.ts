@@ -1,27 +1,34 @@
 import { createClient as createClientBase } from "@supabase/supabase-js"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 import type { Database } from "@/types/supabase"
+
+// Verificar que las variables de entorno estén definidas
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  throw new Error("NEXT_PUBLIC_SUPABASE_URL no está definido")
+}
+
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn("SUPABASE_SERVICE_ROLE_KEY no está definido")
+}
 
 // Cliente para componentes del servidor
 export function createClient() {
-  return createServerComponentClient<Database>({ cookies })
+  return createClientBase<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
 }
 
 // Cliente para componentes del cliente
-let clientSingleton: ReturnType<typeof createClientBase<Database>> | null = null
+let clientSingleton: ReturnType<typeof createClientBase<Database>>
 
 export function createClientClient() {
   if (clientSingleton) return clientSingleton
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  clientSingleton = createClientBase<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
 
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Missing Supabase environment variables")
-  }
-
-  clientSingleton = createClientBase<Database>(supabaseUrl, supabaseKey)
   return clientSingleton
 }
 

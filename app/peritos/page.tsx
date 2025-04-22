@@ -2,13 +2,12 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { PlusCircle } from "lucide-react"
 import { PeritosTable } from "@/components/peritos/peritos-table"
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
+import { createClient } from "@/lib/supabase-client"
 
 export const dynamic = "force-dynamic"
 
 export default async function PeritosPage() {
-  const supabase = createServerComponentClient({ cookies })
+  const supabase = createClient()
 
   // Obtener todos los peritos
   const { data: peritos, error } = await supabase.from("peritos").select("*").order("nombre", { ascending: true })
