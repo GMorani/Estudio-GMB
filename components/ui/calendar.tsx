@@ -3,12 +3,10 @@
 import * as React from "react"
 import { DayPicker } from "react-day-picker"
 import { es } from "date-fns/locale"
-import { format, addMonths, subMonths } from "date-fns"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
   onManualDateChange?: (date: Date) => void
@@ -24,7 +22,6 @@ function Calendar({
   ...props
 }: CalendarProps) {
   const [manualDate, setManualDate] = React.useState("")
-  const [currentMonth, setCurrentMonth] = React.useState<Date>(props.defaultMonth || new Date())
 
   // Handle manual date input
   const handleManualDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -58,85 +55,6 @@ function Calendar({
     }
   }
 
-  // Navigate to previous month
-  const goToPreviousMonth = () => {
-    setCurrentMonth((prevMonth) => subMonths(prevMonth, 1))
-  }
-
-  // Navigate to next month
-  const goToNextMonth = () => {
-    setCurrentMonth((prevMonth) => addMonths(prevMonth, 1))
-  }
-
-  // Handle month change from month dropdown
-  const handleMonthYearChange = (newMonth: Date) => {
-    setCurrentMonth(newMonth)
-  }
-
-  // Simplified custom caption component
-  const CustomCaption = ({ displayMonth }: { displayMonth: Date }) => {
-    // Generate years array (current year ± 10 years)
-    const currentYear = displayMonth.getFullYear()
-    const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
-
-    // Generate months array
-    const months = Array.from({ length: 12 }, (_, i) => {
-      const date = new Date(displayMonth)
-      date.setMonth(i)
-      return { value: i, label: format(date, "MMMM", { locale: es }) }
-    })
-
-    const handleMonthChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const newMonth = new Date(displayMonth)
-      newMonth.setMonth(Number.parseInt(event.target.value))
-      handleMonthYearChange(newMonth)
-    }
-
-    const handleYearChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const newMonth = new Date(displayMonth)
-      newMonth.setFullYear(Number.parseInt(event.target.value))
-      handleMonthYearChange(newMonth)
-    }
-
-    return (
-      <div className="flex items-center justify-between w-full px-2">
-        <Button variant="outline" size="sm" onClick={goToPreviousMonth} className="h-7 w-7">
-          <span>←</span>
-        </Button>
-
-        <div className="flex items-center gap-2">
-          <select
-            value={displayMonth.getMonth()}
-            onChange={handleMonthChange}
-            className="h-8 px-2 py-1 rounded border border-input bg-background text-sm"
-          >
-            {months.map((month) => (
-              <option key={month.value} value={month.value}>
-                {month.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={displayMonth.getFullYear()}
-            onChange={handleYearChange}
-            className="h-8 px-2 py-1 rounded border border-input bg-background text-sm"
-          >
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <Button variant="outline" size="sm" onClick={goToNextMonth} className="h-7 w-7">
-          <span>→</span>
-        </Button>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-4">
       <DayPicker
@@ -144,17 +62,11 @@ function Calendar({
         className={cn("p-3", className)}
         locale={locale}
         weekStartsOn={1} // Semana comienza en lunes
-        month={currentMonth}
-        onMonthChange={handleMonthYearChange}
-        captionLayout="buttons"
-        components={{
-          Caption: ({ displayMonth }) => <CustomCaption displayMonth={displayMonth} />,
-        }}
         classNames={{
           months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
           month: "space-y-4 w-full",
           caption: "flex justify-center pt-1 relative items-center mb-4",
-          caption_label: "text-sm font-medium hidden", // Hide default caption
+          caption_label: "text-sm font-medium",
           nav: "space-x-1 flex items-center",
           nav_button: cn(
             buttonVariants({ variant: "outline" }),

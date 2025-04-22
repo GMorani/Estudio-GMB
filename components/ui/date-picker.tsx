@@ -24,11 +24,6 @@ export function DatePicker({ date, setDate, className, disabled }: DatePickerPro
     setOpen(false)
   }
 
-  const handleManualDateChange = (selectedDate: Date) => {
-    setDate(selectedDate)
-    setOpen(false)
-  }
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -42,14 +37,7 @@ export function DatePicker({ date, setDate, className, disabled }: DatePickerPro
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={handleSelect}
-          onManualDateChange={handleManualDateChange}
-          initialFocus
-          locale={es}
-        />
+        <Calendar mode="single" selected={date} onSelect={handleSelect} initialFocus locale={es} />
       </PopoverContent>
     </Popover>
   )
