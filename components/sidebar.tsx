@@ -70,7 +70,7 @@ export function Sidebar({ className }: { className?: string }) {
       color: "text-purple-500",
     },
     {
-      label: "Mediadoras",
+      label: "Mediadores",
       icon: Users,
       href: "/mediadores",
       color: "text-indigo-500",
