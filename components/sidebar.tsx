@@ -40,12 +40,6 @@ export function Sidebar({ className }: { className?: string }) {
       color: "text-pink-500",
     },
     {
-      label: "Personas",
-      icon: Users,
-      href: "/personas",
-      color: "text-orange-500",
-    },
-    {
       label: "Clientes",
       icon: UserRound,
       href: "/clientes",
@@ -68,6 +62,18 @@ export function Sidebar({ className }: { className?: string }) {
       icon: Scale,
       href: "/juzgados",
       color: "text-yellow-500",
+    },
+    {
+      label: "Peritos",
+      icon: UserRound,
+      href: "/peritos",
+      color: "text-purple-500",
+    },
+    {
+      label: "Mediadoras",
+      icon: Users,
+      href: "/mediadores",
+      color: "text-indigo-500",
     },
     {
       label: "Calendario",
