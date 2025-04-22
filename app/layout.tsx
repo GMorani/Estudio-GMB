@@ -2,7 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { Navigation } from "@/components/navigation"
+import { SidebarTemp } from "@/components/ui/sidebar-temp"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 
@@ -25,7 +25,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <div className="flex min-h-screen">
             <div className="hidden md:block w-64 border-r">
-              <Navigation />
+              <SidebarTemp />
             </div>
             <div className="flex-1 overflow-auto">
               <main className="p-4">{children}</main>

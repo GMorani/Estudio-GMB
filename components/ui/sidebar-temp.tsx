@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
-export function Sidebar({ className }: { className?: string }) {
+export function SidebarTemp({ className }: { className?: string }) {
   const pathname = usePathname()
 
   return (
