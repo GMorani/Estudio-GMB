@@ -1,56 +1,8 @@
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { PlusCircle } from "lucide-react"
-import { MediadoresTable } from "@/components/mediadores/mediadores-table"
-import { createClient } from "@/lib/supabase-client"
-
-export const dynamic = "force-dynamic"
-
-export default async function MediadoresPage() {
-  const supabase = createClient()
-
-  // Obtener todos los mediadores
-  const { data: mediadores, error } = await supabase
-    .from("mediadores")
-    .select("*")
-    .order("nombre", { ascending: true })
-    .catch(() => ({ data: null, error: { message: "Error al cargar mediadores" } }))
-
-  const hasMediadores = mediadores && mediadores.length > 0
-
+export default function MediadoresPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Mediadores</h1>
-        <Button asChild>
-          <Link href="/mediadores/nuevo">
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Nuevo Mediador
-          </Link>
-        </Button>
-      </div>
-
-      {error && (
-        <div className="rounded-md bg-red-50 p-4 border border-red-200">
-          <p className="text-red-800">Error al cargar mediadores: {error.message}</p>
-        </div>
-      )}
-
-      {!error &&
-        (hasMediadores ? (
-          <MediadoresTable mediadores={mediadores} />
-        ) : (
-          <div className="rounded-md border p-8 text-center">
-            <h2 className="text-xl font-semibold mb-2">No hay mediadores para mostrar</h2>
-            <p className="text-muted-foreground mb-4">Comienza agregando un nuevo mediador a tu sistema.</p>
-            <Button asChild>
-              <Link href="/mediadores/nuevo">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Agregar Mediador
-              </Link>
-            </Button>
-          </div>
-        ))}
+    <div>
+      <h1>Mediadores</h1>
+      <p>Esta es la página de mediadores.</p>
     </div>
   )
 }
