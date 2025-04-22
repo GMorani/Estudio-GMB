@@ -1,26 +1,40 @@
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createClient as createClientBase } from "@supabase/supabase-js"
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import type { Database } from "@/types/supabase"
 
-// Función para crear un cliente de Supabase para componentes del servidor
+// Cliente para componentes del servidor
 export function createClient() {
-  try {
-    return createServerComponentClient({ cookies })
-  } catch (error) {
-    console.error("Error al crear el cliente de Supabase:", error)
-    throw error
-  }
+  return createServerComponentClient<Database>({ cookies })
 }
 
-// Función para crear un cliente de Supabase para componentes del cliente
+// Cliente para componentes del cliente
+let clientSingleton: ReturnType<typeof createClientBase<Database>> | null = null
+
 export function createClientClient() {
-  return createClientComponentClient()
+  if (clientSingleton) return clientSingleton
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase environment variables")
+  }
+
+  clientSingleton = createClientBase<Database>(supabaseUrl, supabaseKey)
+  return clientSingleton
 }
 
 // Función para crear un cliente de Supabase con manejo de errores y limitación de tasa
 export function createSupabaseClient() {
-  const supabase = createClientComponentClient<Database>()
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase environment variables")
+  }
+
+  const supabase = createClientBase<Database>(supabaseUrl, supabaseKey)
 
   // Contador de solicitudes para limitación de tasa
   let requestCount = 0
