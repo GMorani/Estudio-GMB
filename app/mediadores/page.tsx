@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
 export default async function MediadoresPage() {
   const supabase = createServerComponentClient({ cookies })
 
-  // Obtener todos los mediadores - Corregido para manejar errores correctamente
+  // Obtener todos los mediadores
   const { data: mediadores, error } = await supabase.from("mediadores").select("*").order("nombre", { ascending: true })
 
   const hasMediadores = mediadores && mediadores.length > 0

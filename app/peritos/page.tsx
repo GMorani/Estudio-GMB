@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
 export default async function PeritosPage() {
   const supabase = createServerComponentClient({ cookies })
 
-  // Obtener todos los peritos - Corregido para manejar errores correctamente
+  // Obtener todos los peritos
   const { data: peritos, error } = await supabase.from("peritos").select("*").order("nombre", { ascending: true })
 
   const hasPeritos = peritos && peritos.length > 0
