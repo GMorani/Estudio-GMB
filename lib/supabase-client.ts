@@ -95,3 +95,6 @@ export function useSupabaseClient() {
     safeQuery: query,
   }
 }
+
+// Exportar la función createClient como se requiere
+export const createClient = createClientComponentClient

@@ -13,3 +13,6 @@ export function getSupabaseClient() {
 
 // Exportar el cliente de Supabase como una exportación nombrada
 export const supabase = getSupabaseClient()
+
+// Exportar la función createClient como se requiere
+export const createClient = createClientComponentClient

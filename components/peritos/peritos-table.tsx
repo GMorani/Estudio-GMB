@@ -17,20 +17,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { formatDNI, formatTelefono } from "@/lib/utils"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { useToast } from "@/components/ui/use-toast"
 
 type Perito = {
   id: string
   nombre: string
-  dni_cuit: string
-  telefono: string
-  email: string
-  domicilio: string
-  peritos: {
-    id: string
-  }
+  telefono?: string
+  email?: string
+  especialidad?: string
+  direccion?: string
+  notas?: string
 }
 
 export function PeritosTable({ peritos: initialPeritos }: { peritos: Perito[] }) {
@@ -43,23 +40,17 @@ export function PeritosTable({ peritos: initialPeritos }: { peritos: Perito[] })
   const filteredPeritos = peritos.filter(
     (perito) =>
       perito.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      perito.dni_cuit?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      perito.especialidad?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       perito.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      perito.domicilio?.toLowerCase().includes(searchTerm.toLowerCase()),
+      perito.direccion?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   // Eliminar perito
   async function eliminarPerito(id: string) {
     try {
-      // Primero eliminar de la tabla peritos
-      const { error: errorPeritos } = await supabase.from("peritos").delete().eq("id", id)
+      const { error } = await supabase.from("peritos").delete().eq("id", id)
 
-      if (errorPeritos) throw errorPeritos
-
-      // Luego eliminar de la tabla personas
-      const { error: errorPersonas } = await supabase.from("personas").delete().eq("id", id)
-
-      if (errorPersonas) throw errorPersonas
+      if (error) throw error
 
       // Actualizar la lista de peritos
       setPeritos(peritos.filter((perito) => perito.id !== id))
@@ -85,7 +76,7 @@ export function PeritosTable({ peritos: initialPeritos }: { peritos: Perito[] })
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Buscar por nombre, DNI o email..."
+            placeholder="Buscar por nombre, especialidad o email..."
             className="pl-8"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -98,7 +89,7 @@ export function PeritosTable({ peritos: initialPeritos }: { peritos: Perito[] })
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
-              <TableHead>DNI</TableHead>
+              <TableHead>Especialidad</TableHead>
               <TableHead className="hidden md:table-cell">Teléfono</TableHead>
               <TableHead className="hidden md:table-cell">Email</TableHead>
               <TableHead>Acciones</TableHead>
@@ -115,9 +106,9 @@ export function PeritosTable({ peritos: initialPeritos }: { peritos: Perito[] })
               filteredPeritos.map((perito) => (
                 <TableRow key={perito.id}>
                   <TableCell className="font-medium">{perito.nombre}</TableCell>
-                  <TableCell>{formatDNI(perito.dni_cuit)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{formatTelefono(perito.telefono)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{perito.email}</TableCell>
+                  <TableCell>{perito.especialidad || "-"}</TableCell>
+                  <TableCell className="hidden md:table-cell">{perito.telefono || "-"}</TableCell>
+                  <TableCell className="hidden md:table-cell">{perito.email || "-"}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon" asChild>
@@ -143,8 +134,7 @@ export function PeritosTable({ peritos: initialPeritos }: { peritos: Perito[] })
                           <AlertDialogHeader>
                             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Esta acción no se puede deshacer. Se eliminará permanentemente el perito y todas sus
-                              relaciones.
+                              Esta acción no se puede deshacer. Se eliminará permanentemente el perito.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

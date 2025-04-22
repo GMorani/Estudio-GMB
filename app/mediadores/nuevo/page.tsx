@@ -1,13 +1,15 @@
 import { MediadorForm } from "@/components/mediadores/mediador-form"
 
-// Marcar la página como dinámica
-export const dynamic = "force-dynamic"
-
 export default function NuevoMediadorPage() {
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Nuevo Mediador</h1>
-      <MediadorForm />
+      <div>
+        <h1 className="text-3xl font-bold">Nuevo Mediador</h1>
+        <p className="text-muted-foreground">Completa el formulario para crear un nuevo mediador.</p>
+      </div>
+      <div className="border rounded-lg p-6">
+        <MediadorForm />
+      </div>
     </div>
   )
 }

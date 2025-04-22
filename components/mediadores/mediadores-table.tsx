@@ -17,20 +17,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { formatDNI, formatTelefono } from "@/lib/utils"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { useToast } from "@/components/ui/use-toast"
 
 type Mediador = {
   id: string
   nombre: string
-  dni_cuit: string
-  telefono: string
-  email: string
-  domicilio: string
-  mediadores: {
-    id: string
-  }
+  telefono?: string
+  email?: string
+  entidad?: string
+  direccion?: string
+  notas?: string
 }
 
 export function MediadoresTable({ mediadores: initialMediadores }: { mediadores: Mediador[] }) {
@@ -43,23 +40,17 @@ export function MediadoresTable({ mediadores: initialMediadores }: { mediadores:
   const filteredMediadores = mediadores.filter(
     (mediador) =>
       mediador.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mediador.dni_cuit?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      mediador.entidad?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       mediador.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      mediador.domicilio?.toLowerCase().includes(searchTerm.toLowerCase()),
+      mediador.direccion?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   // Eliminar mediador
   async function eliminarMediador(id: string) {
     try {
-      // Primero eliminar de la tabla mediadores
-      const { error: errorMediadores } = await supabase.from("mediadores").delete().eq("id", id)
+      const { error } = await supabase.from("mediadores").delete().eq("id", id)
 
-      if (errorMediadores) throw errorMediadores
-
-      // Luego eliminar de la tabla personas
-      const { error: errorPersonas } = await supabase.from("personas").delete().eq("id", id)
-
-      if (errorPersonas) throw errorPersonas
+      if (error) throw error
 
       // Actualizar la lista de mediadores
       setMediadores(mediadores.filter((mediador) => mediador.id !== id))
@@ -85,7 +76,7 @@ export function MediadoresTable({ mediadores: initialMediadores }: { mediadores:
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Buscar por nombre, DNI o email..."
+            placeholder="Buscar por nombre, entidad o email..."
             className="pl-8"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -98,7 +89,7 @@ export function MediadoresTable({ mediadores: initialMediadores }: { mediadores:
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
-              <TableHead>DNI</TableHead>
+              <TableHead>Entidad</TableHead>
               <TableHead className="hidden md:table-cell">Teléfono</TableHead>
               <TableHead className="hidden md:table-cell">Email</TableHead>
               <TableHead>Acciones</TableHead>
@@ -115,9 +106,9 @@ export function MediadoresTable({ mediadores: initialMediadores }: { mediadores:
               filteredMediadores.map((mediador) => (
                 <TableRow key={mediador.id}>
                   <TableCell className="font-medium">{mediador.nombre}</TableCell>
-                  <TableCell>{formatDNI(mediador.dni_cuit)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{formatTelefono(mediador.telefono)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{mediador.email}</TableCell>
+                  <TableCell>{mediador.entidad || "-"}</TableCell>
+                  <TableCell className="hidden md:table-cell">{mediador.telefono || "-"}</TableCell>
+                  <TableCell className="hidden md:table-cell">{mediador.email || "-"}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon" asChild>
@@ -143,8 +134,7 @@ export function MediadoresTable({ mediadores: initialMediadores }: { mediadores:
                           <AlertDialogHeader>
                             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Esta acción no se puede deshacer. Se eliminará permanentemente el mediador y todas sus
-                              relaciones.
+                              Esta acción no se puede deshacer. Se eliminará permanentemente el mediador.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
