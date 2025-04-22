@@ -8,18 +8,39 @@ import { ClienteExpedientes } from "@/components/clientes/cliente-expedientes"
 import { formatDNI, formatTelefono } from "@/lib/utils"
 import { ArrowLeft, Pencil } from "lucide-react"
 
-// Marcar la página como dinámica
+// Marcar la página como dinámica para asegurar que se renderice en cada solicitud
 export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export default async function ClienteDetallePage({
   params,
 }: {
   params: { id: string }
 }) {
+  // Verificar que el ID sea válido
+  if (!params.id || typeof params.id !== "string") {
+    console.error("ID de cliente inválido:", params.id)
+    notFound()
+  }
+
   const supabase = createServerComponentClient({ cookies })
 
   try {
-    // Obtener datos del cliente
+    console.log("Buscando cliente con ID:", params.id)
+
+    // Primero verificamos si el cliente existe
+    const { data: clienteExiste, error: errorExiste } = await supabase
+      .from("personas")
+      .select("id")
+      .eq("id", params.id)
+      .single()
+
+    if (errorExiste || !clienteExiste) {
+      console.error("Cliente no encontrado:", errorExiste)
+      notFound()
+    }
+
+    // Si llegamos aquí, el cliente existe, ahora obtenemos todos sus datos
     const { data: cliente, error } = await supabase
       .from("personas")
       .select(`
@@ -31,22 +52,26 @@ export default async function ClienteDetallePage({
         domicilio,
         clientes (
           referido
-        ),
-        vehiculos (
-          id,
-          marca,
-          modelo,
-          anio,
-          dominio
         )
       `)
       .eq("id", params.id)
       .single()
 
     if (error || !cliente) {
-      console.error("Error fetching cliente:", error)
-      notFound()
+      console.error("Error al obtener datos del cliente:", error)
+      return (
+        <div className="p-4">
+          <h1 className="text-xl font-bold">Error al cargar los datos del cliente</h1>
+          <p className="text-red-500">Detalles: {error?.message || "Error desconocido"}</p>
+          <Button asChild className="mt-4">
+            <Link href="/clientes">Volver a la lista de clientes</Link>
+          </Button>
+        </div>
+      )
     }
+
+    // Obtener vehículos por separado para evitar problemas con las relaciones anidadas
+    const { data: vehiculos } = await supabase.from("vehiculos").select("*").eq("persona_id", params.id)
 
     // Obtener nombre del referido si existe
     let referidoNombre = ""
@@ -142,7 +167,7 @@ export default async function ClienteDetallePage({
             </CardContent>
           </Card>
 
-          {cliente.vehiculos && cliente.vehiculos.length > 0 && (
+          {vehiculos && vehiculos.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Vehículo</CardTitle>
@@ -151,19 +176,19 @@ export default async function ClienteDetallePage({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Marca</p>
-                    <p>{cliente.vehiculos[0].marca}</p>
+                    <p>{vehiculos[0].marca}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Modelo</p>
-                    <p>{cliente.vehiculos[0].modelo}</p>
+                    <p>{vehiculos[0].modelo}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Año</p>
-                    <p>{cliente.vehiculos[0].anio}</p>
+                    <p>{vehiculos[0].anio}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Dominio</p>
-                    <p>{cliente.vehiculos[0].dominio}</p>
+                    <p>{vehiculos[0].dominio}</p>
                   </div>
                 </div>
               </CardContent>
@@ -181,8 +206,19 @@ export default async function ClienteDetallePage({
         </Card>
       </div>
     )
-  } catch (error) {
-    console.error("Error in ClienteDetallePage:", error)
-    notFound()
+  } catch (error: any) {
+    console.error("Error crítico en ClienteDetallePage:", error)
+
+    // Mostrar una página de error con detalles en lugar de notFound()
+    return (
+      <div className="p-4">
+        <h1 className="text-xl font-bold">Error al cargar la página</h1>
+        <p className="text-red-500">Detalles: {error?.message || "Error desconocido"}</p>
+        <pre className="mt-4 p-4 bg-gray-100 rounded overflow-auto text-xs">{JSON.stringify(error, null, 2)}</pre>
+        <Button asChild className="mt-4">
+          <Link href="/clientes">Volver a la lista de clientes</Link>
+        </Button>
+      </div>
+    )
   }
 }
