@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
+  Users,
   FileText,
   Calendar,
   Settings,
@@ -37,6 +38,12 @@ export function Sidebar({ className }: { className?: string }) {
       icon: CheckSquare,
       href: "/tareas",
       color: "text-pink-500",
+    },
+    {
+      label: "Personas",
+      icon: Users,
+      href: "/personas",
+      color: "text-orange-500",
     },
     {
       label: "Clientes",
@@ -89,7 +96,7 @@ export function Sidebar({ className }: { className?: string }) {
                 className="w-full justify-start"
                 asChild
               >
-                <Link href={route.href}>
+                <Link href={route.href} prefetch={true}>
                   <route.icon className={cn("mr-2 h-4 w-4", route.color)} />
                   {route.label}
                 </Link>

@@ -2,8 +2,9 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { Sidebar } from "@/components/sidebar"
+import { Sidebar } from "@/components/ui/sidebar"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -15,17 +16,22 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode
-}) {
+}>) {
   return (
     <html lang="es">
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
           <div className="flex min-h-screen">
-            <Sidebar className="w-64 hidden md:block" />
-            <main className="flex-1 p-6 md:p-8">{children}</main>
+            <div className="hidden md:block w-64 border-r">
+              <Sidebar />
+            </div>
+            <div className="flex-1 overflow-auto">
+              <main className="p-4">{children}</main>
+            </div>
           </div>
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

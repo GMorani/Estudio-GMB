@@ -3,195 +3,144 @@
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent } from "@/components/ui/card"
-import { Search, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
+import { Loader2 } from "lucide-react"
 
 export function ExpedientesFilter() {
+  const [personas, setPersonas] = useState<{ id: string; nombre: string }[]>([])
+  const [estados, setEstados] = useState<{ id: string; nombre: string }[]>([])
+  const [loadingOptions, setLoadingOptions] = useState(true)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
+  const { toast } = useToast()
 
-  // Estados para los filtros
-  const [numero, setNumero] = useState(searchParams.get("numero") || "")
-  const [persona, setPersona] = useState(searchParams.get("persona") || "all")
-  const [estado, setEstado] = useState(searchParams.get("estado") || "all")
-  const [tipo, setTipo] = useState(searchParams.get("tipo") || "activos")
-  const [ordenarPor, setOrdenarPor] = useState(searchParams.get("ordenarPor") || "fecha_inicio")
-  const [ordenAscendente, setOrdenAscendente] = useState(searchParams.get("ordenAscendente") === "true")
+  // Obtener parámetros de búsqueda actuales
+  const numero = searchParams.get("numero") || ""
+  const persona = searchParams.get("persona") || "all"
+  const estado = searchParams.get("estado") || "all"
+  const tipo = searchParams.get("tipo") || "activos"
+  const ordenarPor = searchParams.get("ordenarPor") || "fecha_inicio"
+  const ordenAscendente = searchParams.get("ordenAscendente") === "true"
 
-  // Estados para las opciones de los selects
-  const [personas, setPersonas] = useState<{ id: string; nombre: string }[]>([])
-  const [estados, setEstados] = useState<{ id: number; nombre: string }[]>([])
-  const [loading, setLoading] = useState(true)
+  // Estado local para los filtros
+  const [numeroFilter, setNumeroFilter] = useState(numero)
+  const [personaFilter, setPersonaFilter] = useState(persona)
+  const [estadoFilter, setEstadoFilter] = useState(estado)
 
-  // Cargar opciones para los selects
   useEffect(() => {
-    async function cargarOpciones() {
-      setLoading(true)
+    async function fetchOptions() {
+      setLoadingOptions(true)
       try {
-        // Cargar personas
+        // Obtener personas (clientes)
         const { data: personasData, error: personasError } = await supabase
           .from("personas")
           .select("id, nombre")
+          .eq("tipo_id", 1) // Tipo cliente
           .order("nombre")
 
         if (personasError) throw personasError
-        setPersonas(personasData || [])
 
-        // Cargar estados
+        // Obtener estados
         const { data: estadosData, error: estadosError } = await supabase
           .from("estados_expediente")
           .select("id, nombre")
           .order("nombre")
 
         if (estadosError) throw estadosError
+
+        setPersonas(personasData || [])
         setEstados(estadosData || [])
       } catch (error) {
-        console.error("Error al cargar opciones:", error)
+        console.error("Error al cargar opciones de filtro:", error)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar las opciones de filtro.",
+          variant: "destructive",
+        })
       } finally {
-        setLoading(false)
+        setLoadingOptions(false)
       }
     }
 
-    cargarOpciones()
-  }, [supabase])
+    fetchOptions()
+  }, [supabase, toast])
 
-  // Función para aplicar los filtros
-  const aplicarFiltros = () => {
+  // Actualizar la URL con los parámetros de búsqueda
+  const applyFilters = () => {
     const params = new URLSearchParams()
 
-    if (numero) params.set("numero", numero)
-    if (persona !== "all") params.set("persona", persona)
-    if (estado !== "all") params.set("estado", estado)
-    if (tipo !== "todos") params.set("tipo", tipo)
-    if (ordenarPor) params.set("ordenarPor", ordenarPor)
-    params.set("ordenAscendente", ordenAscendente.toString())
+    if (numeroFilter) params.set("numero", numeroFilter)
+    if (personaFilter !== "all") params.set("persona", personaFilter)
+    if (estadoFilter !== "all") params.set("estado", estadoFilter)
+
+    // Mantener los otros parámetros
+    params.set("tipo", tipo)
+    params.set("ordenarPor", ordenarPor)
+    params.set("ordenAscendente", String(ordenAscendente))
 
     router.push(`/expedientes?${params.toString()}`)
   }
 
-  // Función para limpiar los filtros
-  const limpiarFiltros = () => {
-    setNumero("")
-    setPersona("all")
-    setEstado("all")
-    setTipo("activos")
-    setOrdenarPor("fecha_inicio")
-    setOrdenAscendente(false)
-    router.push("/expedientes")
-  }
-
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {/* Filtro por número */}
-          <div className="space-y-2">
-            <Label htmlFor="numero">Número de expediente</Label>
-            <Input
-              id="numero"
-              placeholder="Buscar por número"
-              value={numero}
-              onChange={(e) => setNumero(e.target.value)}
-            />
-          </div>
-
-          {/* Filtro por persona */}
-          <div className="space-y-2">
-            <Label htmlFor="persona">Cliente</Label>
-            <Select value={persona} onValueChange={setPersona}>
-              <SelectTrigger id="persona">
-                <SelectValue placeholder="Seleccionar cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los clientes</SelectItem>
-                {personas.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Filtro por estado */}
-          <div className="space-y-2">
-            <Label htmlFor="estado">Estado</Label>
-            <Select value={estado} onValueChange={setEstado}>
-              <SelectTrigger id="estado">
-                <SelectValue placeholder="Seleccionar estado" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
-                {estados.map((e) => (
-                  <SelectItem key={e.id} value={e.id.toString()}>
-                    {e.nombre}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Filtro por tipo */}
-          <div className="space-y-2">
-            <Label htmlFor="tipo">Mostrar</Label>
-            <Select value={tipo} onValueChange={setTipo}>
-              <SelectTrigger id="tipo">
-                <SelectValue placeholder="Tipo de expedientes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="activos">Expedientes activos</SelectItem>
-                <SelectItem value="archivados">Expedientes archivados</SelectItem>
-                <SelectItem value="todos">Todos los expedientes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Ordenar por */}
-          <div className="space-y-2">
-            <Label htmlFor="ordenarPor">Ordenar por</Label>
-            <Select value={ordenarPor} onValueChange={setOrdenarPor}>
-              <SelectTrigger id="ordenarPor">
-                <SelectValue placeholder="Ordenar por" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fecha_inicio">Fecha de inicio</SelectItem>
-                <SelectItem value="numero">Número de expediente</SelectItem>
-                <SelectItem value="monto_total">Monto total</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Orden ascendente/descendente */}
-          <div className="space-y-2">
-            <Label htmlFor="orden">Orden</Label>
-            <Select value={ordenAscendente.toString()} onValueChange={(value) => setOrdenAscendente(value === "true")}>
-              <SelectTrigger id="orden">
-                <SelectValue placeholder="Orden" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="false">Descendente (más reciente primero)</SelectItem>
-                <SelectItem value="true">Ascendente (más antiguo primero)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <Label htmlFor="numero">Número</Label>
+          <Input
+            type="text"
+            id="numero"
+            placeholder="Buscar por número"
+            value={numeroFilter}
+            onChange={(e) => setNumeroFilter(e.target.value)}
+          />
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="outline" onClick={limpiarFiltros} type="button">
-            <X className="mr-2 h-4 w-4" />
-            Limpiar filtros
-          </Button>
-          <Button onClick={aplicarFiltros} type="button">
-            <Search className="mr-2 h-4 w-4" />
-            Buscar expedientes
-          </Button>
+        <div>
+          <Label htmlFor="persona">Cliente</Label>
+          <Select value={personaFilter} onValueChange={setPersonaFilter} disabled={loadingOptions}>
+            <SelectTrigger>
+              <SelectValue placeholder={loadingOptions ? "Cargando..." : "Seleccionar cliente"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {personas.map((persona) => (
+                <SelectItem key={persona.id} value={persona.id}>
+                  {persona.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      </CardContent>
-    </Card>
+
+        <div>
+          <Label htmlFor="estado">Estado</Label>
+          <Select value={estadoFilter} onValueChange={setEstadoFilter} disabled={loadingOptions}>
+            <SelectTrigger>
+              <SelectValue placeholder={loadingOptions ? "Cargando..." : "Seleccionar estado"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {estados.map((estado) => (
+                <SelectItem key={estado.id} value={estado.id}>
+                  {estado.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={applyFilters} disabled={loadingOptions}>
+          {loadingOptions && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Aplicar Filtros
+        </Button>
+      </div>
+    </div>
   )
 }

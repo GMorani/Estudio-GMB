@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -18,7 +18,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
 import { formatDNI, formatTelefono } from "@/lib/utils"
-import { Loader2 } from "lucide-react"
 
 // Esquema de validación
 const clienteSchema = z.object({
@@ -44,47 +43,15 @@ type ClienteFormValues = z.infer<typeof clienteSchema>
 
 type ClienteFormProps = {
   cliente?: any
-  clientesReferidos?: { id: string; nombre: string }[]
-  onSuccess?: (id: string) => void
+  clientesReferidos: { id: string; nombre: string }[]
 }
 
-export function ClienteForm({ cliente, clientesReferidos = [], onSuccess }: ClienteFormProps) {
+export function ClienteForm({ cliente, clientesReferidos }: ClienteFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
   const [dominioEmail, setDominioEmail] = useState<string>("@gmail.com")
   const [emailPersonalizado, setEmailPersonalizado] = useState<boolean>(false)
-  const [isLoading, setIsLoading] = useState<boolean>(false)
-  const [referidos, setReferidos] = useState<{ id: string; nombre: string }[]>([])
-  const [isLoadingReferidos, setIsLoadingReferidos] = useState<boolean>(false)
-
-  // Cargar referidos si no se proporcionan
-  useEffect(() => {
-    if (clientesReferidos.length === 0) {
-      const fetchReferidos = async () => {
-        setIsLoadingReferidos(true)
-        try {
-          const { data, error } = await supabase
-            .from("personas")
-            .select("id, nombre")
-            .eq("tipo_id", 1) // Asumiendo que tipo_id 1 es para clientes
-            .order("nombre")
-
-          if (error) throw error
-          setReferidos(data || [])
-        } catch (error) {
-          console.error("Error al cargar referidos:", error)
-          setReferidos([])
-        } finally {
-          setIsLoadingReferidos(false)
-        }
-      }
-
-      fetchReferidos()
-    } else {
-      setReferidos(clientesReferidos)
-    }
-  }, [clientesReferidos, supabase])
 
   // Valores por defecto
   const defaultValues: Partial<ClienteFormValues> = cliente
@@ -170,7 +137,6 @@ export function ClienteForm({ cliente, clientesReferidos = [], onSuccess }: Clie
   }
 
   async function onSubmit(data: ClienteFormValues) {
-    setIsLoading(true)
     try {
       console.log("Guardando cliente con datos:", data)
 
@@ -269,12 +235,8 @@ export function ClienteForm({ cliente, clientesReferidos = [], onSuccess }: Clie
           : "El cliente ha sido creado correctamente",
       })
 
-      if (onSuccess) {
-        onSuccess(personaId)
-      } else {
-        router.push("/clientes")
-        router.refresh()
-      }
+      router.push("/clientes")
+      router.refresh()
     } catch (error) {
       console.error("Error al guardar cliente:", error)
       toast({
@@ -282,8 +244,6 @@ export function ClienteForm({ cliente, clientesReferidos = [], onSuccess }: Clie
         description: "Ocurrió un error al guardar el cliente",
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -426,7 +386,7 @@ export function ClienteForm({ cliente, clientesReferidos = [], onSuccess }: Clie
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Referido por</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange} disabled={isLoadingReferidos}>
+                    <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Seleccionar referido" />
@@ -434,18 +394,11 @@ export function ClienteForm({ cliente, clientesReferidos = [], onSuccess }: Clie
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">Sin referido</SelectItem>
-                        {isLoadingReferidos ? (
-                          <div className="flex items-center justify-center p-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="ml-2">Cargando...</span>
-                          </div>
-                        ) : (
-                          referidos.map((cliente) => (
-                            <SelectItem key={cliente.id} value={cliente.id}>
-                              {cliente.nombre}
-                            </SelectItem>
-                          ))
-                        )}
+                        {clientesReferidos.map((cliente) => (
+                          <SelectItem key={cliente.id} value={cliente.id}>
+                            {cliente.nombre}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormDescription>Persona que refirió al cliente</FormDescription>
@@ -568,16 +521,7 @@ export function ClienteForm({ cliente, clientesReferidos = [], onSuccess }: Clie
               <Button type="button" variant="outline" onClick={() => router.push("/clientes")}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {cliente ? "Actualizando..." : "Guardando..."}
-                  </>
-                ) : (
-                  <>{cliente ? "Actualizar" : "Guardar"}</>
-                )}
-              </Button>
+              <Button type="submit">{cliente ? "Actualizar" : "Guardar"}</Button>
             </div>
           </form>
         </Form>

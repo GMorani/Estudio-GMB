@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { useToast } from "@/components/ui/use-toast"
 import { formatDate } from "@/lib/utils"
-import { Loader2, PlusCircle, Pencil, Trash2, Check, X } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { PlusCircle, Loader2, Pencil, Trash2, ChevronDown, ChevronUp } from "lucide-react"
 
 type Actividad = {
   id: number
@@ -16,82 +17,56 @@ type Actividad = {
   automatica: boolean
 }
 
-export function ExpedienteActividades({
-  expedienteId,
-  nuevaActividad,
-}: {
+type ExpedienteActividadesProps = {
   expedienteId: string
-  nuevaActividad?: any
-}) {
-  const [actividades, setActividades] = useState<Actividad[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [nuevaDescripcion, setNuevaDescripcion] = useState("")
-  const [mostrarFormulario, setMostrarFormulario] = useState(false)
-  const [mostrarTodas, setMostrarTodas] = useState(false)
-  const [enviando, setEnviando] = useState(false)
-  const [editando, setEditando] = useState<number | null>(null)
-  const [descripcionEditada, setDescripcionEditada] = useState("")
-  const [eliminando, setEliminando] = useState<number | null>(null)
+  actividades: Actividad[]
+  nuevaActividad?: Actividad | null
+}
+
+export function ExpedienteActividades({ expedienteId, actividades, nuevaActividad }: ExpedienteActividadesProps) {
+  const router = useRouter()
+  const { toast } = useToast()
   const supabase = createClientComponentClient()
-  const prevNuevaActividadRef = useRef<any>()
+  const [actividadesState, setActividadesState] = useState<Actividad[]>(
+    actividades.filter((act) => act.descripcion !== "Expediente actualizado"),
+  )
+  const [mostrarTodas, setMostrarTodas] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
+  const [nuevaActividadTexto, setNuevaActividadTexto] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editandoActividad, setEditandoActividad] = useState<number | null>(null)
+  const [textoEditado, setTextoEditado] = useState("")
+  const [isLoading, setIsLoading] = useState<Record<number, boolean>>({})
 
-  // Cargar actividades
+  // Determinar cuántas actividades mostrar
+  const actividadesMostradas = mostrarTodas ? actividadesState : actividadesState.slice(0, 3)
+
+  // Efecto para manejar la nueva actividad recibida como prop
   useEffect(() => {
-    const cargarActividades = async () => {
-      try {
-        setLoading(true)
-        const { data, error } = await supabase
-          .from("actividades_expediente")
-          .select("*")
-          .eq("expediente_id", expedienteId)
-          .order("fecha", { ascending: false })
-
-        if (error) throw error
-
-        // Filtrar actividades que contengan "Expediente actualizado"
-        const actividadesFiltradas = data.filter(
-          (actividad) => !actividad.descripcion.includes("Expediente actualizado"),
-        )
-        setActividades(actividadesFiltradas || [])
-      } catch (error: any) {
-        console.error("Error al cargar actividades:", error)
-        setError("Error al cargar las actividades. Por favor, intente nuevamente.")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    cargarActividades()
-  }, [expedienteId, supabase])
-
-  // Detectar nueva actividad desde props
-  useEffect(() => {
-    if (nuevaActividad && (!prevNuevaActividadRef.current || prevNuevaActividadRef.current.id !== nuevaActividad.id)) {
-      // Verificar que no contenga "Expediente actualizado"
-      if (!nuevaActividad.descripcion.includes("Expediente actualizado")) {
-        setActividades((prevActividades) => [nuevaActividad, ...prevActividades])
-      }
-      prevNuevaActividadRef.current = nuevaActividad
+    if (nuevaActividad && !actividadesState.some((act) => act.id === nuevaActividad.id)) {
+      setActividadesState((prev) => [nuevaActividad, ...prev])
     }
   }, [nuevaActividad])
 
-  // Agregar nueva actividad
-  const agregarActividad = async () => {
-    if (!nuevaDescripcion.trim()) {
-      setError("Por favor, ingrese una descripción para la actividad.")
+  // Función para crear una nueva actividad
+  const crearActividad = async () => {
+    if (!nuevaActividadTexto.trim()) {
+      toast({
+        title: "Error",
+        description: "La descripción de la actividad es obligatoria.",
+        variant: "destructive",
+      })
       return
     }
 
     try {
-      setEnviando(true)
-      setError(null)
+      setIsSubmitting(true)
 
       const { data, error } = await supabase
         .from("actividades_expediente")
         .insert({
           expediente_id: expedienteId,
-          descripcion: nuevaDescripcion.trim(),
+          descripcion: nuevaActividadTexto,
           fecha: new Date().toISOString(),
           automatica: false,
         })
@@ -100,245 +75,243 @@ export function ExpedienteActividades({
 
       if (error) throw error
 
-      // Actualizar estado local
-      setActividades((prevActividades) => [data, ...prevActividades])
-      setNuevaDescripcion("")
-      setMostrarFormulario(false)
-    } catch (error: any) {
-      console.error("Error al agregar actividad:", error)
-      setError("Error al agregar la actividad. Por favor, intente nuevamente.")
+      // Actualizar el estado local
+      setActividadesState((prevActividades) => [data, ...prevActividades])
+
+      // Limpiar el formulario
+      setNuevaActividadTexto("")
+      setIsCreating(false)
+
+      toast({
+        title: "Actividad registrada",
+        description: "La actividad ha sido registrada correctamente.",
+      })
+    } catch (error) {
+      console.error("Error al crear actividad:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo registrar la actividad. Intente nuevamente.",
+        variant: "destructive",
+      })
     } finally {
-      setEnviando(false)
+      setIsSubmitting(false)
     }
   }
 
-  // Editar actividad
-  const iniciarEdicion = (actividad: Actividad) => {
-    setEditando(actividad.id)
-    setDescripcionEditada(actividad.descripcion)
-  }
-
-  const cancelarEdicion = () => {
-    setEditando(null)
-    setDescripcionEditada("")
-  }
-
-  const guardarEdicion = async (actividadId: number) => {
-    if (!descripcionEditada.trim()) {
-      setError("La descripción no puede estar vacía.")
+  // Función para editar una actividad
+  const editarActividad = async (id: number) => {
+    if (!textoEditado.trim()) {
+      toast({
+        title: "Error",
+        description: "La descripción de la actividad es obligatoria.",
+        variant: "destructive",
+      })
       return
     }
 
     try {
-      setEnviando(true)
-      setError(null)
+      setIsLoading((prev) => ({ ...prev, [id]: true }))
 
-      const { error } = await supabase
-        .from("actividades_expediente")
-        .update({ descripcion: descripcionEditada.trim() })
-        .eq("id", actividadId)
+      const { error } = await supabase.from("actividades_expediente").update({ descripcion: textoEditado }).eq("id", id)
 
       if (error) throw error
 
-      // Actualizar estado local
-      setActividades((prevActividades) =>
-        prevActividades.map((act) =>
-          act.id === actividadId ? { ...act, descripcion: descripcionEditada.trim() } : act,
-        ),
+      // Actualizar el estado local
+      setActividadesState((prevActividades) =>
+        prevActividades.map((act) => (act.id === id ? { ...act, descripcion: textoEditado } : act)),
       )
-      setEditando(null)
-      setDescripcionEditada("")
-    } catch (error: any) {
+
+      setEditandoActividad(null)
+      setTextoEditado("")
+
+      toast({
+        title: "Actividad actualizada",
+        description: "La actividad ha sido actualizada correctamente.",
+      })
+    } catch (error) {
       console.error("Error al editar actividad:", error)
-      setError("Error al editar la actividad. Por favor, intente nuevamente.")
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la actividad. Intente nuevamente.",
+        variant: "destructive",
+      })
     } finally {
-      setEnviando(false)
+      setIsLoading((prev) => ({ ...prev, [id]: false }))
     }
   }
 
-  // Eliminar actividad
-  const eliminarActividad = async (actividadId: number) => {
+  // Función para eliminar una actividad
+  const eliminarActividad = async (id: number) => {
     try {
-      setEliminando(actividadId)
-      setError(null)
+      setIsLoading((prev) => ({ ...prev, [id]: true }))
 
-      const { error } = await supabase.from("actividades_expediente").delete().eq("id", actividadId)
+      const { error } = await supabase.from("actividades_expediente").delete().eq("id", id)
 
       if (error) throw error
 
-      // Actualizar estado local
-      setActividades((prevActividades) => prevActividades.filter((act) => act.id !== actividadId))
-    } catch (error: any) {
+      // Actualizar el estado local
+      setActividadesState((prevActividades) => prevActividades.filter((act) => act.id !== id))
+
+      toast({
+        title: "Actividad eliminada",
+        description: "La actividad ha sido eliminada correctamente.",
+      })
+    } catch (error) {
       console.error("Error al eliminar actividad:", error)
-      setError("Error al eliminar la actividad. Por favor, intente nuevamente.")
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la actividad. Intente nuevamente.",
+        variant: "destructive",
+      })
     } finally {
-      setEliminando(null)
+      setIsLoading((prev) => ({ ...prev, [id]: false }))
     }
   }
-
-  // Calcular actividades a mostrar
-  const actividadesMostradas = mostrarTodas ? actividades : actividades.slice(0, 3)
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle>Actividades</CardTitle>
-            <CardDescription>Historial de actividades del expediente</CardDescription>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setMostrarFormulario(!mostrarFormulario)}
-            disabled={enviando}
-          >
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Actividades</CardTitle>
+        {!isCreating && (
+          <Button variant="outline" size="sm" onClick={() => setIsCreating(true)}>
             <PlusCircle className="h-4 w-4 mr-2" />
-            Nueva actividad
+            Nueva Actividad
           </Button>
-        </div>
+        )}
       </CardHeader>
-      <CardContent>
-        {error && <div className="bg-destructive/10 text-destructive text-sm p-2 rounded-md mb-4">{error}</div>}
-
-        {mostrarFormulario && (
-          <div className="space-y-4 mb-6 p-4 border rounded-md bg-muted/30">
-            <div>
-              <label htmlFor="descripcion-actividad" className="block text-sm font-medium mb-1">
-                Descripción de la actividad
-              </label>
+      <CardContent className="space-y-4">
+        {isCreating && (
+          <div className="border rounded-md p-4 space-y-4">
+            <h3 className="font-medium">Nueva Actividad</h3>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Descripción</label>
               <Input
-                id="descripcion-actividad"
-                value={nuevaDescripcion}
-                onChange={(e) => setNuevaDescripcion(e.target.value)}
-                placeholder="Describir la actividad realizada"
-                disabled={enviando}
+                value={nuevaActividadTexto}
+                onChange={(e) => setNuevaActividadTexto(e.target.value)}
+                placeholder="Describir la actividad..."
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setMostrarFormulario(false)
-                  setNuevaDescripcion("")
-                  setError(null)
-                }}
-                disabled={enviando}
-              >
+              <Button variant="outline" onClick={() => setIsCreating(false)}>
                 Cancelar
               </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={agregarActividad}
-                disabled={enviando || !nuevaDescripcion.trim()}
-              >
-                {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Guardar actividad"}
+              <Button onClick={crearActividad} disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  "Guardar Actividad"
+                )}
               </Button>
             </div>
           </div>
         )}
 
-        {loading ? (
-          <div className="flex justify-center items-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : actividades.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>No hay actividades registradas para este expediente.</p>
-            <p className="text-sm">Puedes agregar una nueva actividad usando el botón superior.</p>
+        {actividadesState.length === 0 && !isCreating ? (
+          <div className="text-center py-6">
+            <p className="text-muted-foreground">No hay actividades registradas para este expediente.</p>
+            <Button variant="link" onClick={() => setIsCreating(true)}>
+              Registrar una nueva actividad
+            </Button>
           </div>
         ) : (
           <div className="space-y-3">
             {actividadesMostradas.map((actividad) => (
               <div key={actividad.id} className={`p-3 border rounded-md ${actividad.automatica ? "bg-muted/30" : ""}`}>
-                {editando === actividad.id ? (
+                {editandoActividad === actividad.id ? (
                   <div className="space-y-2">
                     <Input
-                      value={descripcionEditada}
-                      onChange={(e) => setDescripcionEditada(e.target.value)}
-                      disabled={enviando}
+                      value={textoEditado}
+                      onChange={(e) => setTextoEditado(e.target.value)}
+                      placeholder="Descripción de la actividad"
                     />
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={cancelarEdicion}
-                        disabled={enviando}
-                        className="h-8 w-8 p-0"
+                        onClick={() => {
+                          setEditandoActividad(null)
+                          setTextoEditado("")
+                        }}
                       >
-                        <X className="h-4 w-4" />
+                        Cancelar
                       </Button>
                       <Button
-                        variant="default"
                         size="sm"
-                        onClick={() => guardarEdicion(actividad.id)}
-                        disabled={enviando || !descripcionEditada.trim()}
-                        className="h-8 w-8 p-0"
+                        onClick={() => editarActividad(actividad.id)}
+                        disabled={isLoading[actividad.id]}
                       >
-                        {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        {isLoading[actividad.id] ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Guardando...
+                          </>
+                        ) : (
+                          "Guardar"
+                        )}
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium">{actividad.descripcion}</p>
-                      <p className="text-sm text-muted-foreground">{formatDate(actividad.fecha)}</p>
+                  <>
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <p className="font-medium">{actividad.descripcion}</p>
+                        <p className="text-sm text-muted-foreground">{formatDate(actividad.fecha)}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setEditandoActividad(actividad.id)
+                            setTextoEditado(actividad.descripcion)
+                          }}
+                          title="Editar"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          <span className="sr-only">Editar</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => eliminarActividad(actividad.id)}
+                          disabled={isLoading[actividad.id]}
+                          title="Eliminar"
+                        >
+                          {isLoading[actividad.id] ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                          <span className="sr-only">Eliminar</span>
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-1">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => iniciarEdicion(actividad)}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Editar actividad</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => eliminarActividad(actividad.id)}
-                              disabled={eliminando === actividad.id}
-                              className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                              {eliminando === actividad.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Eliminar actividad</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </div>
+                  </>
                 )}
               </div>
             ))}
           </div>
         )}
 
-        {actividades.length > 3 && (
-          <Button variant="link" className="mt-4 p-0 h-auto" onClick={() => setMostrarTodas(!mostrarTodas)}>
-            {mostrarTodas ? "Mostrar menos" : `Ver todas (${actividades.length})`}
+        {actividadesState.length > 3 && (
+          <Button variant="ghost" className="w-full text-sm" onClick={() => setMostrarTodas(!mostrarTodas)}>
+            {mostrarTodas ? (
+              <>
+                <ChevronUp className="h-4 w-4 mr-2" />
+                Mostrar menos
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4 mr-2" />
+                Ver todas ({actividadesState.length})
+              </>
+            )}
           </Button>
         )}
       </CardContent>

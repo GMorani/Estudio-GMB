@@ -1,316 +1,640 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
+import { DatePicker } from "@/components/ui/date-picker"
 import { useToast } from "@/components/ui/use-toast"
-import { Skeleton } from "@/components/ui/skeleton"
+import { formatCurrency } from "@/lib/utils"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PlusCircle, Trash2 } from "lucide-react"
 
 // Esquema de validación
 const expedienteSchema = z.object({
   numero: z.string().min(1, "El número es obligatorio"),
   numero_judicial: z.string().optional(),
-  fecha_inicio: z.string().optional(),
-  fecha_inicio_judicial: z.string().optional(),
+  fecha_inicio: z.date({
+    required_error: "La fecha de inicio es obligatoria",
+  }),
+  fecha_inicio_judicial: z.date().optional(),
   monto_total: z.string().optional(),
   juzgado_id: z.string().optional(),
-  objeto: z.string().optional(),
+  objeto: z.string().min(1, "El objeto es obligatorio"),
   autos: z.string().optional(),
-  estados: z.array(z.string()).optional(),
-  clientes: z.array(z.string()).optional(),
-  abogados: z.array(z.string()).optional(),
-  aseguradoras: z.array(z.string()).optional(),
-  mediadores: z.array(z.string()).optional(),
-  peritos: z.array(z.string()).optional(),
+  estados: z.array(z.string()).optional().default([]),
+  personas: z
+    .array(
+      z.object({
+        id: z.string().min(1, "La persona es obligatoria"),
+        rol: z.string().min(1, "El rol es obligatorio"),
+        tipo: z.string().optional(),
+        relacion_id: z.string().optional(),
+      }),
+    )
+    .min(1, "Debe agregar al menos una persona"),
 })
 
 type ExpedienteFormValues = z.infer<typeof expedienteSchema>
 
-type ExpedienteFormProps = {
-  expedienteId?: string
-  initialData?: any
-  onSuccess?: (id: string) => void
+type Persona = {
+  id: string
+  nombre: string
 }
 
-export function ExpedienteForm({ expedienteId, initialData, onSuccess }: ExpedienteFormProps) {
+type Estado = {
+  id: number
+  nombre: string
+  color: string
+}
+
+type ExpedienteFormProps = {
+  expediente?: any
+  juzgados: Persona[]
+  estados: Estado[]
+  clientes: Persona[]
+  abogados: Persona[]
+  aseguradoras: Persona[]
+  mediadores: Persona[]
+  peritos: Persona[]
+}
+
+// Roles disponibles para las personas
+const ROLES_DISPONIBLES = [
+  { value: "Actora", label: "Actora" },
+  { value: "Demandada", label: "Demandada" },
+  { value: "Tercero", label: "Tercero" },
+  { value: "Abogado Actora", label: "Abogado Actora" },
+  { value: "Abogado Demandada", label: "Abogado Demandada" },
+  { value: "Mediador", label: "Mediador" },
+  { value: "Perito", label: "Perito" },
+  { value: "Citada en Garantía", label: "Citada en Garantía" },
+]
+
+// Objetos disponibles para los expedientes
+const OBJETOS_DISPONIBLES = [{ value: "Daños y Perjuicios", label: "Daños y Perjuicios" }]
+
+export function ExpedienteForm({
+  expediente,
+  juzgados = [],
+  estados = [],
+  clientes = [],
+  abogados = [],
+  aseguradoras = [],
+  mediadores = [],
+  peritos = [],
+}: ExpedienteFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClientComponentClient()
-  const [isLoading, setIsLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState("general")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formData, setFormData] = useState({
-    juzgados: [] as any[],
-    estados: [] as any[],
-    clientes: [] as any[],
-    abogados: [] as any[],
-    aseguradoras: [] as any[],
-    mediadores: [] as any[],
-    peritos: [] as any[],
-  })
+  const [personasArray, setPersonasArray] = useState<
+    { id: string; rol: string; tipo?: string; relacion_id?: string }[]
+  >([])
+  const [formInitialized, setFormInitialized] = useState(false)
+  const [estadosArray, setEstadosArray] = useState<string[]>([])
+  const [autosGenerado, setAutosGenerado] = useState("")
+  // Almacenar las relaciones entre aseguradoras y demandadas (ya que no existe la columna en la BD)
+  const [relacionesAseguradoras, setRelacionesAseguradoras] = useState<Record<string, string>>({})
 
-  // Procesar los datos iniciales
-  const processInitialData = () => {
-    if (!initialData) return {}
+  // Modificar la función getDefaultValues para asegurar que el objeto se cargue correctamente
+  const getDefaultValues = () => {
+    try {
+      if (expediente) {
+        // Agregar log más detallado para depuración
+        console.log("Expediente recibido:", expediente)
+        console.log("Objeto del expediente:", expediente.objeto, typeof expediente.objeto)
 
-    // Extraer estados del expediente
-    const estados = initialData.expediente_estados?.map((estado: any) => estado.estado_id) || []
-
-    // Extraer personas por rol
-    const expedientePersonas = initialData.expediente_personas || []
-    const clientes = expedientePersonas
-      .filter((persona: any) => persona.rol === "Cliente")
-      .map((persona: any) => persona.persona_id)
-
-    const abogados = expedientePersonas
-      .filter((persona: any) => persona.rol === "Abogado")
-      .map((persona: any) => persona.persona_id)
-
-    const aseguradoras = expedientePersonas
-      .filter((persona: any) => persona.rol === "Aseguradora")
-      .map((persona: any) => persona.persona_id)
-
-    const mediadores = expedientePersonas
-      .filter((persona: any) => persona.rol === "Mediador")
-      .map((persona: any) => persona.persona_id)
-
-    const peritos = expedientePersonas
-      .filter((persona: any) => persona.rol === "Perito")
-      .map((persona: any) => persona.persona_id)
-
-    return {
-      numero: initialData.numero || "",
-      numero_judicial: initialData.numero_judicial || "",
-      fecha_inicio: initialData.fecha_inicio || "",
-      fecha_inicio_judicial: initialData.fecha_inicio_judicial || "",
-      monto_total: initialData.monto_total || "",
-      juzgado_id: initialData.juzgado_id || "",
-      objeto: initialData.objeto || "",
-      autos: initialData.autos || "",
-      estados,
-      clientes,
-      abogados,
-      aseguradoras,
-      mediadores,
-      peritos,
+        return {
+          numero: expediente.numero || "",
+          numero_judicial: expediente.numero_judicial || "",
+          fecha_inicio: expediente.fecha_inicio ? new Date(expediente.fecha_inicio) : new Date(),
+          fecha_inicio_judicial: expediente.fecha_inicio_judicial
+            ? new Date(expediente.fecha_inicio_judicial)
+            : undefined,
+          monto_total: expediente.monto_total ? String(expediente.monto_total) : "",
+          juzgado_id: expediente.juzgado_id || "",
+          // Asegurar que el objeto tenga un valor por defecto válido
+          objeto: expediente.objeto || OBJETOS_DISPONIBLES[0].value,
+          autos: expediente.autos || "",
+          estados: [], // Se actualizará después con useEffect
+          personas: [], // Se actualizará después con useEffect
+        }
+      } else {
+        // Valores por defecto para un nuevo expediente
+        return {
+          numero: "",
+          numero_judicial: "",
+          fecha_inicio: new Date(),
+          monto_total: "",
+          juzgado_id: "",
+          objeto: OBJETOS_DISPONIBLES[0].value, // Establecer un valor por defecto
+          autos: "",
+          estados: [],
+          personas: [],
+        }
+      }
+    } catch (error) {
+      console.error("Error al preparar valores por defecto:", error)
+      // En caso de error, devolver valores por defecto básicos
+      return {
+        numero: "",
+        numero_judicial: "",
+        fecha_inicio: new Date(),
+        monto_total: "",
+        juzgado_id: "",
+        objeto: OBJETOS_DISPONIBLES[0].value, // Establecer un valor por defecto
+        autos: "",
+        estados: [],
+        personas: [],
+      }
     }
   }
 
-  // Valores por defecto
-  const defaultValues = processInitialData()
-
   const form = useForm<ExpedienteFormValues>({
     resolver: zodResolver(expedienteSchema),
-    defaultValues,
+    defaultValues: getDefaultValues(),
   })
 
-  // Cargar datos necesarios para el formulario
+  // Reemplazar el useEffect para inicializar el objeto con una versión mejorada
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true)
+    if (expediente) {
+      console.log("Inicializando objeto del expediente:", expediente.objeto)
 
-        // Obtener juzgados
-        const { data: juzgados, error: juzgadosError } = await supabase
-          .from("personas")
-          .select("id, nombre")
-          .eq("tipo_id", 4) // Tipo juzgado
-          .order("nombre")
+      // Asegurar que el objeto se establezca correctamente, incluso si es undefined
+      const objetoValue = expediente.objeto || OBJETOS_DISPONIBLES[0].value
 
-        if (juzgadosError) throw juzgadosError
+      // Establecer el valor inmediatamente
+      form.setValue("objeto", objetoValue, {
+        shouldValidate: true,
+        shouldDirty: false,
+        shouldTouch: false,
+      })
 
-        // Obtener estados
-        const { data: estados, error: estadosError } = await supabase
-          .from("estados_expediente")
-          .select("id, nombre, color")
-          .order("nombre")
-
-        if (estadosError) throw estadosError
-
-        // Obtener clientes
-        const { data: clientes, error: clientesError } = await supabase
-          .from("personas")
-          .select("id, nombre")
-          .eq("tipo_id", 1) // Tipo cliente
-          .order("nombre")
-
-        if (clientesError) throw clientesError
-
-        // Obtener abogados
-        const { data: abogados, error: abogadosError } = await supabase
-          .from("personas")
-          .select("id, nombre")
-          .eq("tipo_id", 2) // Tipo abogado
-          .order("nombre")
-
-        if (abogadosError) throw abogadosError
-
-        // Obtener aseguradoras
-        const { data: aseguradoras, error: aseguradorasError } = await supabase
-          .from("personas")
-          .select("id, nombre")
-          .eq("tipo_id", 3) // Tipo aseguradora
-          .order("nombre")
-
-        if (aseguradorasError) throw aseguradorasError
-
-        // Obtener mediadores
-        const { data: mediadores, error: mediadoresError } = await supabase
-          .from("personas")
-          .select("id, nombre")
-          .eq("tipo_id", 5) // Tipo mediador
-          .order("nombre")
-
-        if (mediadoresError) throw mediadoresError
-
-        // Obtener peritos
-        const { data: peritos, error: peritosError } = await supabase
-          .from("personas")
-          .select("id, nombre")
-          .eq("tipo_id", 6) // Tipo perito
-          .order("nombre")
-
-        if (peritosError) throw peritosError
-
-        setFormData({
-          juzgados: juzgados || [],
-          estados: estados || [],
-          clientes: clientes || [],
-          abogados: abogados || [],
-          aseguradoras: aseguradoras || [],
-          mediadores: mediadores || [],
-          peritos: peritos || [],
+      // Y también con un pequeño retraso para asegurar que se aplique
+      setTimeout(() => {
+        form.setValue("objeto", objetoValue, {
+          shouldValidate: true,
+          shouldDirty: false,
+          shouldTouch: false,
         })
-      } catch (error) {
-        console.error("Error al cargar datos:", error)
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los datos necesarios para el formulario",
-          variant: "destructive",
-        })
-      } finally {
-        setIsLoading(false)
-      }
+        console.log("Valor del objeto establecido con retraso:", objetoValue)
+      }, 200)
     }
+  }, [expediente, form])
 
-    fetchData()
-  }, [supabase, toast])
+  // Extraer estados de manera segura del expediente (solo una vez al inicio)
+  useEffect(() => {
+    try {
+      if (expediente && expediente.expediente_estados && Array.isArray(expediente.expediente_estados)) {
+        const estadosIds = expediente.expediente_estados
+          .filter((e: any) => e && typeof e === "object" && e.estado_id !== undefined)
+          .map((e: any) => String(e.estado_id))
+
+        console.log("Estados extraídos:", estadosIds)
+        setEstadosArray(estadosIds)
+
+        // Actualizar el formulario con los estados extraídos
+        form.setValue("estados", estadosIds, {
+          shouldValidate: true,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
+      }
+    } catch (error) {
+      console.error("Error al extraer estados del expediente:", error)
+      setEstadosArray([])
+    }
+  }, [expediente, form])
+
+  // Extraer personas de manera segura del expediente (solo una vez al inicio)
+  useEffect(() => {
+    try {
+      if (expediente) {
+        let personasDefault: { id: string; rol: string; tipo?: string; relacion_id?: string }[] = []
+        const relacionesTemp: Record<string, string> = {}
+
+        if (expediente.expediente_personas && Array.isArray(expediente.expediente_personas)) {
+          personasDefault = expediente.expediente_personas
+            .filter((p: any) => p && typeof p === "object" && p.persona_id)
+            .map((p: any) => {
+              // Determinar el tipo de persona basado en el rol
+              let tipo = undefined
+              let relacion_id = ""
+
+              if (p.rol === "Citada en Garantía") {
+                tipo = "aseguradora"
+
+                // Buscar la relación con la persona demandada
+                // Esto es una simulación ya que no tenemos la columna en la BD
+                // Podríamos usar metadatos o alguna convención para almacenar esta información
+
+                // Buscar entre las demandadas
+                const demandadas = expediente.expediente_personas.filter((d: any) => d && d.rol === "Demandada")
+
+                if (demandadas.length > 0) {
+                  // Asumimos que la primera demandada es la relacionada con esta aseguradora
+                  relacion_id = demandadas[0].persona_id || ""
+
+                  // Guardar la relación para usarla después
+                  if (p.persona_id && relacion_id) {
+                    relacionesTemp[p.persona_id] = relacion_id
+                  }
+                }
+              }
+
+              return {
+                id: p.persona_id,
+                rol: p.rol || "",
+                tipo,
+                relacion_id,
+              }
+            })
+        }
+
+        // Actualizar el estado de relaciones
+        if (Object.keys(relacionesTemp).length > 0) {
+          setRelacionesAseguradoras(relacionesTemp)
+          console.log("Relaciones de aseguradoras cargadas:", relacionesTemp)
+        }
+
+        setPersonasArray(personasDefault)
+      }
+    } catch (error) {
+      console.error("Error al extraer personas del expediente:", error)
+      setPersonasArray([])
+    }
+  }, [expediente])
+
+  // Actualizar el campo personas del formulario cuando cambie personasArray
+  useEffect(() => {
+    if (personasArray.length > 0) {
+      form.setValue("personas", personasArray, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      })
+    }
+    setFormInitialized(true)
+  }, [personasArray, form])
+
+  // Generar automáticamente el campo "Autos" cuando cambien las personas o el objeto
+  useEffect(() => {
+    try {
+      const personas = form.watch("personas") || []
+      const objeto = form.watch("objeto") || ""
+
+      // Buscar la persona con rol "Actora"
+      const actora = personas.find((p) => p.rol === "Actora")
+      // Buscar la persona con rol "Demandada"
+      const demandada = personas.find((p) => p.rol === "Demandada")
+
+      let nombreActora = ""
+      let nombreDemandada = ""
+
+      // Obtener el nombre de la actora
+      if (actora && actora.id) {
+        const personaActora = getAllPersonas().find((p) => p.id === actora.id)
+        if (personaActora) {
+          nombreActora = personaActora.nombre
+        }
+      }
+
+      // Obtener el nombre de la demandada
+      if (demandada && demandada.id) {
+        const personaDemandada = getAllPersonas().find((p) => p.id === demandada.id)
+        if (personaDemandada) {
+          nombreDemandada = personaDemandada.nombre
+        }
+      }
+
+      // Generar el texto de "Autos"
+      let autos = ""
+      if (nombreActora) {
+        autos = nombreActora
+        if (nombreDemandada) {
+          autos += " C/ " + nombreDemandada
+        }
+        if (objeto) {
+          autos += " S/ " + objeto
+        }
+      }
+
+      setAutosGenerado(autos)
+
+      // Actualizar el campo "autos" en el formulario
+      if (autos) {
+        form.setValue("autos", autos, {
+          shouldValidate: false,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
+      }
+    } catch (error) {
+      console.error("Error al generar autos:", error)
+    }
+  }, [form.watch("personas"), form.watch("objeto"), form])
+
+  // Manejar cambios en el monto para formatear automáticamente
+  const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const value = e.target.value.replace(/[^\d]/g, "")
+      if (value) {
+        const numberValue = Number.parseInt(value, 10)
+        form.setValue("monto_total", String(numberValue))
+      } else {
+        form.setValue("monto_total", "")
+      }
+    } catch (error) {
+      console.error("Error al manejar cambio de monto:", error)
+    }
+  }
+
+  // Agregar persona al expediente
+  const addPersona = () => {
+    try {
+      const newPersona = { id: "", rol: "" }
+      const updatedPersonas = [...personasArray, newPersona]
+      setPersonasArray(updatedPersonas)
+
+      // Actualizar explícitamente el campo personas en el formulario
+      form.setValue("personas", updatedPersonas, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      })
+    } catch (error) {
+      console.error("Error al agregar persona:", error)
+    }
+  }
+
+  // Eliminar persona del expediente
+  const removePersona = (index: number) => {
+    try {
+      const updatedPersonas = personasArray.filter((_, i) => i !== index)
+      setPersonasArray(updatedPersonas)
+      form.setValue("personas", updatedPersonas, {
+        shouldValidate: true,
+        shouldDirty: true,
+        shouldTouch: true,
+      })
+    } catch (error) {
+      console.error("Error al eliminar persona:", error)
+    }
+  }
+
+  // Actualizar persona en el expediente
+  const updatePersona = (index: number, field: "id" | "rol" | "relacion_id", value: string) => {
+    try {
+      const updatedPersonas = [...personasArray]
+      if (updatedPersonas[index]) {
+        updatedPersonas[index] = {
+          ...updatedPersonas[index],
+          [field]: value,
+        }
+        setPersonasArray(updatedPersonas)
+
+        // Si estamos actualizando la relación, guardarla en el estado local
+        if (field === "relacion_id" && updatedPersonas[index].id) {
+          setRelacionesAseguradoras({
+            ...relacionesAseguradoras,
+            [updatedPersonas[index].id]: value,
+          })
+        }
+
+        // Actualizar explícitamente el campo personas en el formulario
+        form.setValue("personas", updatedPersonas, {
+          shouldValidate: true,
+          shouldDirty: true,
+          shouldTouch: true,
+        })
+      }
+    } catch (error) {
+      console.error(`Error al actualizar ${field} de persona:`, error)
+    }
+  }
+
+  // Preparar lista de todas las personas disponibles
+  const getAllPersonas = () => {
+    try {
+      const allPersonas = []
+
+      // Agregar clientes si existen
+      if (clientes && Array.isArray(clientes)) {
+        for (const cliente of clientes) {
+          if (cliente && typeof cliente === "object" && cliente.id && cliente.nombre) {
+            allPersonas.push({ ...cliente, tipo: "Cliente" })
+          }
+        }
+      }
+
+      // Agregar abogados si existen
+      if (abogados && Array.isArray(abogados)) {
+        for (const abogado of abogados) {
+          if (abogado && typeof abogado === "object" && abogado.id && abogado.nombre) {
+            allPersonas.push({ ...abogado, tipo: "Abogado" })
+          }
+        }
+      }
+
+      // Agregar aseguradoras si existen
+      if (aseguradoras && Array.isArray(aseguradoras)) {
+        for (const aseguradora of aseguradoras) {
+          if (aseguradora && typeof aseguradora === "object" && aseguradora.id && aseguradora.nombre) {
+            allPersonas.push({ ...aseguradora, tipo: "Aseguradora" })
+          }
+        }
+      }
+
+      // Agregar mediadores si existen
+      if (mediadores && Array.isArray(mediadores)) {
+        for (const mediador of mediadores) {
+          if (mediador && typeof mediador === "object" && mediador.id && mediador.nombre) {
+            allPersonas.push({ ...mediador, tipo: "Mediador" })
+          }
+        }
+      }
+
+      // Agregar peritos si existen
+      if (peritos && Array.isArray(peritos)) {
+        for (const perito of peritos) {
+          if (perito && typeof perito === "object" && perito.id && perito.nombre) {
+            allPersonas.push({ ...perito, tipo: "Perito" })
+          }
+        }
+      }
+
+      return allPersonas
+    } catch (error) {
+      console.error("Error al obtener todas las personas:", error)
+      return []
+    }
+  }
+
+  // Verificar si el número de expediente ya existe
+  const checkNumeroExists = async (numero: string): Promise<boolean> => {
+    try {
+      if (!numero) return false
+
+      // Si estamos editando un expediente existente y el número no ha cambiado, no es un duplicado
+      if (expediente && expediente.numero === numero) return false
+
+      const { data, error } = await supabase.from("expedientes").select("id").eq("numero", numero).maybeSingle()
+
+      if (error) {
+        console.error("Error al verificar número de expediente:", error)
+        return false
+      }
+
+      return !!data
+    } catch (error) {
+      console.error("Error al verificar número de expediente:", error)
+      return false
+    }
+  }
 
   async function onSubmit(data: ExpedienteFormValues) {
+    if (isSubmitting) return
+
     try {
       setIsSubmitting(true)
 
-      // 1. Crear o actualizar en la tabla expedientes
+      // Verificar si el número de expediente ya existe
+      const numeroExists = await checkNumeroExists(data.numero)
+      if (numeroExists) {
+        toast({
+          title: "Error",
+          description: `El número de expediente ${data.numero} ya existe. Por favor, utilice otro número.`,
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        return
+      }
+
+      // 1. Crear o actualizar expediente
       const expedienteData = {
         numero: data.numero,
-        numero_judicial: data.numero_judicial,
-        fecha_inicio: data.fecha_inicio,
-        fecha_inicio_judicial: data.fecha_inicio_judicial,
-        monto_total: data.monto_total,
-        juzgado_id: data.juzgado_id || null,
+        numero_judicial: data.numero_judicial || null,
+        fecha_inicio: data.fecha_inicio.toISOString(),
+        fecha_inicio_judicial: data.fecha_inicio_judicial?.toISOString() || null,
+        monto_total: data.monto_total ? Number.parseInt(data.monto_total, 10) : null,
+        juzgado_id: data.juzgado_id === "none" ? null : data.juzgado_id || null,
         objeto: data.objeto,
         autos: data.autos,
       }
 
-      let currentExpedienteId = initialData?.id || expedienteId
+      let expedienteId
 
-      if (currentExpedienteId) {
+      if (expediente) {
         // Actualizar expediente existente
-        const { error: updateError } = await supabase
-          .from("expedientes")
-          .update(expedienteData)
-          .eq("id", currentExpedienteId)
+        const { error: updateError } = await supabase.from("expedientes").update(expedienteData).eq("id", expediente.id)
 
         if (updateError) throw updateError
+        expedienteId = expediente.id
       } else {
         // Crear nuevo expediente
         const { data: newExpediente, error: insertError } = await supabase
           .from("expedientes")
-          .insert(expedienteData)
+          .insert({ ...expedienteData, fecha_creacion: new Date().toISOString() })
           .select("id")
           .single()
 
         if (insertError) throw insertError
-        currentExpedienteId = newExpediente.id
+        expedienteId = newExpediente.id
       }
 
-      // 2. Actualizar relaciones en expediente_estados
-      // Eliminar relaciones existentes
-      if (currentExpedienteId) {
+      // 2. Manejar estados del expediente
+      if (expediente) {
+        // Eliminar estados existentes
         const { error: deleteEstadosError } = await supabase
           .from("expediente_estados")
           .delete()
-          .eq("expediente_id", currentExpedienteId)
+          .eq("expediente_id", expedienteId)
 
         if (deleteEstadosError) throw deleteEstadosError
       }
 
-      // Insertar nuevas relaciones
+      // Insertar nuevos estados
       if (data.estados && data.estados.length > 0) {
         const estadosData = data.estados.map((estadoId) => ({
-          expediente_id: currentExpedienteId,
-          estado_id: estadoId,
+          expediente_id: expedienteId,
+          estado_id: Number.parseInt(estadoId, 10),
         }))
 
-        const { error: insertEstadosError } = await supabase.from("expediente_estados").insert(estadosData)
+        if (estadosData.length > 0) {
+          const { error: insertEstadosError } = await supabase.from("expediente_estados").insert(estadosData)
 
-        if (insertEstadosError) throw insertEstadosError
+          if (insertEstadosError) throw insertEstadosError
+        }
       }
 
-      // 3. Actualizar relaciones en expediente_personas
-      // Eliminar relaciones existentes
-      if (currentExpedienteId) {
+      // 3. Manejar personas del expediente
+      if (expediente) {
+        // Eliminar personas existentes
         const { error: deletePersonasError } = await supabase
           .from("expediente_personas")
           .delete()
-          .eq("expediente_id", currentExpedienteId)
+          .eq("expediente_id", expedienteId)
 
         if (deletePersonasError) throw deletePersonasError
       }
 
-      // Insertar nuevas relaciones
-      const roles = [
-        { tipo: "Cliente", ids: data.clientes },
-        { tipo: "Abogado", ids: data.abogados },
-        { tipo: "Aseguradora", ids: data.aseguradoras },
-        { tipo: "Mediador", ids: data.mediadores },
-        { tipo: "Perito", ids: data.peritos },
-      ]
+      // Filtrar y validar personas antes de insertar
+      // IMPORTANTE: Eliminamos relacion_id del objeto que se envía a la base de datos
+      const personasData = data.personas
+        .filter((p) => p && p.id && p.id.trim() !== "" && p.rol && p.rol.trim() !== "") // Filtrar entradas vacías o inválidas
+        .map(({ id, rol }) => ({
+          // Desestructuramos para solo tomar id y rol
+          expediente_id: expedienteId,
+          persona_id: id,
+          rol: rol,
+        }))
 
-      for (const rol of roles) {
-        if (rol.ids && rol.ids.length > 0) {
-          const personasData = rol.ids.map((personaId) => ({
-            expediente_id: currentExpedienteId,
-            persona_id: personaId,
-            rol: rol.tipo,
-          }))
+      if (personasData.length > 0) {
+        const { error: insertPersonasError } = await supabase.from("expediente_personas").insert(personasData)
 
-          const { error: insertPersonasError } = await supabase.from("expediente_personas").insert(personasData)
-
-          if (insertPersonasError) throw insertPersonasError
-        }
+        if (insertPersonasError) throw insertPersonasError
       }
 
+      // 4. Registrar actividad
+      await supabase.from("actividades_expediente").insert({
+        expediente_id: expedienteId,
+        descripcion: expediente ? `Expediente actualizado: ${data.numero}` : `Expediente creado: ${data.numero}`,
+        fecha: new Date().toISOString(),
+        automatica: true,
+      })
+
+      // 5. Almacenar las relaciones en algún lugar (por ejemplo, en localStorage o en una tabla separada)
+      // Esto es opcional y se puede implementar más adelante si es necesario
+      console.log("Relaciones de aseguradoras:", relacionesAseguradoras)
+
       toast({
-        title: initialData ? "Expediente actualizado" : "Expediente creado",
-        description: initialData
+        title: expediente ? "Expediente actualizado" : "Expediente creado",
+        description: expediente
           ? "El expediente ha sido actualizado correctamente"
           : "El expediente ha sido creado correctamente",
       })
 
-      if (onSuccess) {
-        onSuccess(currentExpedienteId)
+      // Redirigir a la página del expediente específico si estamos editando
+      // o a la lista de expedientes si estamos creando uno nuevo
+      if (expediente && expediente.id) {
+        router.push(`/expedientes/${expediente.id}`)
       } else {
         router.push("/expedientes")
-        router.refresh()
       }
+
+      router.refresh()
     } catch (error) {
       console.error("Error al guardar expediente:", error)
       toast({
@@ -318,410 +642,433 @@ export function ExpedienteForm({ expedienteId, initialData, onSuccess }: Expedie
         description: "Ocurrió un error al guardar el expediente",
         variant: "destructive",
       })
-    } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-10 w-full" />
-      </div>
-    )
-  }
-
+  // Modificar el renderizado del campo objeto para asegurar que muestre el valor correcto
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Número */}
-          <FormField
-            control={form.control}
-            name="numero"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Número</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+    <Card>
+      <CardContent className="pt-6">
+        <Form {...form}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              form.handleSubmit(onSubmit)(e)
+            }}
+            className="space-y-6"
+          >
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="general">Información General</TabsTrigger>
+                <TabsTrigger value="estados">Estados</TabsTrigger>
+                <TabsTrigger value="personas">Personas</TabsTrigger>
+              </TabsList>
 
-          {/* Número Judicial */}
-          <FormField
-            control={form.control}
-            name="numero_judicial"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Número Judicial</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+              {/* Pestaña de Información General */}
+              <TabsContent value="general" className="space-y-6 pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Número de expediente */}
+                  <FormField
+                    control={form.control}
+                    name="numero"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número de expediente</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Ej: 0145-2023" />
+                        </FormControl>
+                        <FormDescription>Ingrese un número único para identificar este expediente</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          {/* Fecha Inicio */}
-          <FormField
-            control={form.control}
-            name="fecha_inicio"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Fecha Inicio</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  {/* Número de expediente judicial */}
+                  <FormField
+                    control={form.control}
+                    name="numero_judicial"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número de expediente judicial</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          {/* Fecha Inicio Judicial */}
-          <FormField
-            control={form.control}
-            name="fecha_inicio_judicial"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Fecha Inicio Judicial</FormLabel>
-                <FormControl>
-                  <Input type="date" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  {/* Fecha de inicio */}
+                  <FormField
+                    control={form.control}
+                    name="fecha_inicio"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>
+                          Fecha de inicio <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <DatePicker date={field.value} setDate={field.onChange} />
+                        <FormDescription>Este campo es obligatorio</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          {/* Monto Total */}
-          <FormField
-            control={form.control}
-            name="monto_total"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Monto Total</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  {/* Fecha de inicio judicial */}
+                  <FormField
+                    control={form.control}
+                    name="fecha_inicio_judicial"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Fecha de inicio judicial</FormLabel>
+                        <DatePicker date={field.value} setDate={field.onChange} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          {/* Juzgado */}
-          <FormField
-            control={form.control}
-            name="juzgado_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Juzgado</FormLabel>
-                <Select value={field.value || ""} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar juzgado" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="none">Ninguno</SelectItem>
-                    {formData.juzgados.map((juzgado) => (
-                      <SelectItem key={juzgado.id} value={juzgado.id}>
-                        {juzgado.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  {/* Juzgado */}
+                  <FormField
+                    control={form.control}
+                    name="juzgado_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Juzgado</FormLabel>
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar juzgado" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="none">Sin juzgado</SelectItem>
+                            {juzgados.map((juzgado) => (
+                              <SelectItem key={juzgado.id} value={juzgado.id}>
+                                {juzgado.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          {/* Objeto */}
-          <FormField
-            control={form.control}
-            name="objeto"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Objeto</FormLabel>
-                <FormControl>
-                  <Textarea {...field} rows={2} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  {/* Monto total */}
+                  <FormField
+                    control={form.control}
+                    name="monto_total"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Monto total</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            onChange={(e) => {
+                              field.onChange(e)
+                              handleMontoChange(e)
+                            }}
+                            value={field.value ? formatCurrency(Number.parseInt(field.value, 10)) : ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-          {/* Autos */}
-          <FormField
-            control={form.control}
-            name="autos"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Autos</FormLabel>
-                <FormControl>
-                  <Textarea {...field} rows={2} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  {/* Objeto */}
+                  <FormField
+                    control={form.control}
+                    name="objeto"
+                    render={({ field }) => {
+                      // Asegurarnos de que el valor del objeto se muestre correctamente
+                      console.log("Renderizando campo objeto con valor:", field.value)
 
-          {/* Estados */}
-          <FormField
-            control={form.control}
-            name="estados"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Estados</FormLabel>
-                <FormControl>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.estados.map((estado) => (
-                      <div key={estado.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`estado-${estado.id}`}
-                          value={estado.id}
-                          checked={field.value?.includes(estado.id)}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            const isChecked = e.target.checked
+                      // Asegurar que siempre haya un valor válido
+                      const currentValue = field.value || OBJETOS_DISPONIBLES[0].value
 
-                            if (isChecked) {
-                              field.onChange([...(field.value || []), value])
-                            } else {
-                              field.onChange(field.value?.filter((val) => val !== value) || [])
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <label htmlFor={`estado-${estado.id}`} className="text-sm" style={{ color: estado.color }}>
-                          {estado.nombre}
-                        </label>
+                      return (
+                        <FormItem>
+                          <FormLabel>
+                            Objeto <span className="text-destructive">*</span>
+                          </FormLabel>
+                          <Select value={currentValue} onValueChange={field.onChange} defaultValue={currentValue}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue>
+                                  {OBJETOS_DISPONIBLES.find((obj) => obj.value === currentValue)?.label || currentValue}
+                                </SelectValue>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {OBJETOS_DISPONIBLES.map((objeto) => (
+                                <SelectItem key={objeto.value} value={objeto.value}>
+                                  {objeto.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormDescription>Este campo es obligatorio</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )
+                    }}
+                  />
+
+                  {/* Autos (generado automáticamente) */}
+                  <FormField
+                    control={form.control}
+                    name="autos"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Autos (Nombre del expediente)</FormLabel>
+                        <FormControl>
+                          <Input {...field} readOnly className="bg-muted" />
+                        </FormControl>
+                        <FormDescription>
+                          Este campo se genera automáticamente a partir de la Actora, Demandada y Objeto
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </TabsContent>
+
+              {/* Pestaña de Estados */}
+              <TabsContent value="estados" className="space-y-6 pt-4">
+                <FormField
+                  control={form.control}
+                  name="estados"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="mb-4">
+                        <FormLabel className="text-base">Estados del expediente</FormLabel>
+                        <FormDescription>Seleccione los estados actuales del expediente</FormDescription>
                       </div>
-                    ))}
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {estados.map((estado) => {
+                          // Convertir el ID a string para comparación consistente
+                          const estadoId = String(estado.id)
+                          // Verificar si este estado está en el array de estados seleccionados
+                          const isChecked = field.value?.includes(estadoId)
 
-          {/* Clientes */}
-          <FormField
-            control={form.control}
-            name="clientes"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Clientes</FormLabel>
-                <FormControl>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.clientes.map((cliente) => (
-                      <div key={cliente.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`cliente-${cliente.id}`}
-                          value={cliente.id}
-                          checked={field.value?.includes(cliente.id)}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            const isChecked = e.target.checked
+                          return (
+                            <FormItem
+                              key={estado.id}
+                              className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4"
+                              style={{
+                                borderColor: estado.color,
+                                backgroundColor: `${estado.color}10`,
+                              }}
+                            >
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value?.includes(estadoId)}
+                                  onCheckedChange={(checked) => {
+                                    // Obtener el valor actual como array
+                                    const currentValue = Array.isArray(field.value) ? [...field.value] : []
 
-                            if (isChecked) {
-                              field.onChange([...(field.value || []), value])
-                            } else {
-                              field.onChange(field.value?.filter((val) => val !== value) || [])
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <label htmlFor={`cliente-${cliente.id}`} className="text-sm">
-                          {cliente.nombre}
-                        </label>
+                                    // Convertir todos los valores a string para comparación consistente
+                                    const stringValues = currentValue.map((v) => String(v))
+
+                                    if (checked) {
+                                      // Si no está incluido, agregarlo
+                                      if (!stringValues.includes(estadoId)) {
+                                        field.onChange([...currentValue, estadoId])
+                                      }
+                                    } else {
+                                      // Filtrar el valor
+                                      field.onChange(currentValue.filter((v) => String(v) !== estadoId))
+                                    }
+
+                                    // Forzar la actualización del formulario
+                                    setTimeout(() => {
+                                      console.log("Estados actualizados:", field.value)
+                                    }, 0)
+                                  }}
+                                />
+                              </FormControl>
+                              <FormLabel className="font-normal">{estado.nombre}</FormLabel>
+                            </FormItem>
+                          )
+                        })}
                       </div>
-                    ))}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
+
+              {/* Pestaña de Personas */}
+              <TabsContent value="personas" className="space-y-6 pt-4">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h3 className="text-lg font-medium">Personas vinculadas</h3>
+                    <p className="text-sm text-muted-foreground">Agregue las personas relacionadas con el expediente</p>
                   </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={addPersona} variant="outline">
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Agregar persona
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        // Agregar una aseguradora como persona con rol predefinido
+                        const newPersona = { id: "", rol: "Citada en Garantía", tipo: "aseguradora", relacion_id: "" }
+                        const updatedPersonas = [...personasArray, newPersona]
+                        setPersonasArray(updatedPersonas)
 
-          {/* Abogados */}
-          <FormField
-            control={form.control}
-            name="abogados"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Abogados</FormLabel>
-                <FormControl>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.abogados.map((abogado) => (
-                      <div key={abogado.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`abogado-${abogado.id}`}
-                          value={abogado.id}
-                          checked={field.value?.includes(abogado.id)}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            const isChecked = e.target.checked
+                        // Actualizar explícitamente el campo personas en el formulario
+                        form.setValue("personas", updatedPersonas, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                          shouldTouch: true,
+                        })
 
-                            if (isChecked) {
-                              field.onChange([...(field.value || []), value])
-                            } else {
-                              field.onChange(field.value?.filter((val) => val !== value) || [])
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <label htmlFor={`abogado-${abogado.id}`} className="text-sm">
-                          {abogado.nombre}
+                        // Cambiar a la pestaña de personas si no está activa
+                        if (activeTab !== "personas") {
+                          setActiveTab("personas")
+                        }
+                      }}
+                      variant="outline"
+                      className="bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300"
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4 text-blue-600" />
+                      Agregar aseguradora
+                    </Button>
+                  </div>
+                </div>
+
+                {personasArray.length === 0 && (
+                  <div className="text-center py-8 border rounded-md">
+                    <p className="text-muted-foreground">No hay personas vinculadas</p>
+                    <Button type="button" onClick={addPersona} variant="link">
+                      Agregar persona
+                    </Button>
+                  </div>
+                )}
+
+                {personasArray.map((persona, index) => (
+                  <div key={index} className="border rounded-md p-4 space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-medium">
+                        {persona.tipo === "aseguradora" ? "Aseguradora" : `Persona ${index + 1}`}
+                      </h4>
+                      <Button type="button" onClick={() => removePersona(index)} variant="ghost" size="icon">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Selector de Persona */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">
+                          {persona.tipo === "aseguradora" ? "Aseguradora" : "Persona"}
                         </label>
+                        <Select value={persona.id} onValueChange={(value) => updatePersona(index, "id", value)}>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={`Seleccionar ${persona.tipo === "aseguradora" ? "aseguradora" : "persona"}`}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {persona.tipo === "aseguradora"
+                              ? aseguradoras.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.nombre}
+                                  </SelectItem>
+                                ))
+                              : getAllPersonas().map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.nombre} ({p.tipo})
+                                  </SelectItem>
+                                ))}
+                          </SelectContent>
+                        </Select>
+                        {form.formState.errors.personas?.[index]?.id && (
+                          <p className="text-sm text-destructive">
+                            {persona.tipo === "aseguradora" ? "La aseguradora" : "La persona"} es obligatoria
+                          </p>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
 
-          {/* Aseguradoras */}
-          <FormField
-            control={form.control}
-            name="aseguradoras"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Aseguradoras</FormLabel>
-                <FormControl>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.aseguradoras.map((aseguradora) => (
-                      <div key={aseguradora.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`aseguradora-${aseguradora.id}`}
-                          value={aseguradora.id}
-                          checked={field.value?.includes(aseguradora.id)}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            const isChecked = e.target.checked
-
-                            if (isChecked) {
-                              field.onChange([...(field.value || []), value])
-                            } else {
-                              field.onChange(field.value?.filter((val) => val !== value) || [])
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <label htmlFor={`aseguradora-${aseguradora.id}`} className="text-sm">
-                          {aseguradora.nombre}
-                        </label>
+                      {/* Selector de Rol */}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Rol</label>
+                        {persona.tipo === "aseguradora" ? (
+                          <div className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">
+                            Citada en Garantía
+                          </div>
+                        ) : (
+                          <Select value={persona.rol} onValueChange={(value) => updatePersona(index, "rol", value)}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar rol" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ROLES_DISPONIBLES.map((rol) => (
+                                <SelectItem key={rol.value} value={rol.value}>
+                                  {rol.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        {form.formState.errors.personas?.[index]?.rol && (
+                          <p className="text-sm text-destructive">El rol es obligatorio</p>
+                        )}
                       </div>
-                    ))}
+
+                      {/* Selector de Relación (solo para aseguradoras) */}
+                      {persona.tipo === "aseguradora" && (
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Relación</label>
+                          <Select
+                            value={persona.relacion_id || ""}
+                            onValueChange={(value) => updatePersona(index, "relacion_id", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar demandada" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {personasArray
+                                .filter((p, i) => p.rol === "Demandada" && i !== index)
+                                .map((p, i) => {
+                                  const personaInfo = getAllPersonas().find((persona) => persona.id === p.id)
+                                  return (
+                                    <SelectItem key={`${p.id}-${i}`} value={p.id}>
+                                      {personaInfo ? personaInfo.nombre : "Persona sin nombre"}
+                                    </SelectItem>
+                                  )
+                                })}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                ))}
+              </TabsContent>
+            </Tabs>
 
-          {/* Mediadores */}
-          <FormField
-            control={form.control}
-            name="mediadores"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Mediadores</FormLabel>
-                <FormControl>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.mediadores.map((mediador) => (
-                      <div key={mediador.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`mediador-${mediador.id}`}
-                          value={mediador.id}
-                          checked={field.value?.includes(mediador.id)}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            const isChecked = e.target.checked
-
-                            if (isChecked) {
-                              field.onChange([...(field.value || []), value])
-                            } else {
-                              field.onChange(field.value?.filter((val) => val !== value) || [])
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <label htmlFor={`mediador-${mediador.id}`} className="text-sm">
-                          {mediador.nombre}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          {/* Peritos */}
-          <FormField
-            control={form.control}
-            name="peritos"
-            render={({ field }) => (
-              <FormItem className="md:col-span-2">
-                <FormLabel>Peritos</FormLabel>
-                <FormControl>
-                  <div className="flex flex-wrap gap-2">
-                    {formData.peritos.map((perito) => (
-                      <div key={perito.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`perito-${perito.id}`}
-                          value={perito.id}
-                          checked={field.value?.includes(perito.id)}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            const isChecked = e.target.checked
-
-                            if (isChecked) {
-                              field.onChange([...(field.value || []), value])
-                            } else {
-                              field.onChange(field.value?.filter((val) => val !== value) || [])
-                            }
-                          }}
-                          className="mr-2"
-                        />
-                        <label htmlFor={`perito-${perito.id}`} className="text-sm">
-                          {perito.nombre}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" onClick={() => router.push("/expedientes")} disabled={isSubmitting}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Guardando..." : initialData ? "Actualizar" : "Guardar"}
-          </Button>
-        </div>
-      </form>
-    </Form>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  expediente ? router.push(`/expedientes/${expediente.id}`) : router.push("/expedientes")
+                }
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Guardando..." : expediente ? "Actualizar" : "Guardar"}
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   )
 }

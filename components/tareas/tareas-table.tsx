@@ -1,168 +1,165 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import { MoreHorizontal, Eye, Edit, Trash, CheckCircle } from "lucide-react"
-import { formatDate } from "@/lib/utils"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { formatDate } from "@/lib/utils"
+import { useToast } from "@/components/ui/use-toast"
+import { CheckCircle, FileText } from "lucide-react"
 
-export interface Tarea {
+type Tarea = {
   id: number
   descripcion: string
   fecha_vencimiento: string
   cumplida: boolean
-  expediente_id?: number
-  expediente?: {
-    id: number
-    numero?: string
-    autos?: string
+  expediente_id: string
+  expedientes: {
+    id: string
+    numero: string
+    autos: string
   }
 }
 
-interface TareasTableProps {
-  tareas?: Tarea[]
-  onTareaUpdated?: () => void
-}
-
-export function TareasTable({ tareas = [], onTareaUpdated }: TareasTableProps) {
+export function TareasTable({ tareas }: { tareas: Tarea[] }) {
   const router = useRouter()
-  const [isUpdating, setIsUpdating] = useState<number | null>(null)
+  const { toast } = useToast()
   const supabase = createClientComponentClient()
+  const [tareasState, setTareasState] = useState<Tarea[]>(tareas)
+  const [isLoading, setIsLoading] = useState<Record<number, boolean>>({})
 
-  const handleViewTarea = (id: number) => {
-    router.push(`/tareas/${id}`)
-  }
-
-  const handleEditTarea = (id: number) => {
-    router.push(`/tareas/${id}/editar`)
-  }
-
-  const handleDeleteTarea = async (id: number) => {
-    if (confirm("¿Está seguro de que desea eliminar esta tarea?")) {
-      try {
-        const { error } = await supabase.from("tareas_expediente").delete().eq("id", id)
-
-        if (error) throw error
-
-        if (onTareaUpdated) onTareaUpdated()
-      } catch (error) {
-        console.error("Error al eliminar la tarea:", error)
-        alert("Error al eliminar la tarea. Por favor, intente nuevamente.")
-      }
-    }
-  }
-
-  const handleToggleCumplida = async (id: number, currentStatus: boolean) => {
-    setIsUpdating(id)
+  // Función para marcar una tarea como completada
+  const completarTarea = async (tareaId: number, expedienteId: string, descripcion: string) => {
     try {
-      const { error } = await supabase.from("tareas_expediente").update({ cumplida: !currentStatus }).eq("id", id)
+      setIsLoading((prev) => ({ ...prev, [tareaId]: true }))
 
-      if (error) throw error
+      // 1. Actualizar la tarea a cumplida
+      const { error: updateError } = await supabase
+        .from("tareas_expediente")
+        .update({ cumplida: true })
+        .eq("id", tareaId)
 
-      if (onTareaUpdated) onTareaUpdated()
+      if (updateError) throw updateError
+
+      // 2. Registrar la actividad
+      const { error: actividadError } = await supabase.from("actividades_expediente").insert({
+        expediente_id: expedienteId,
+        descripcion: `Tarea cumplida - ${descripcion}`,
+        fecha: new Date().toISOString(),
+        automatica: true,
+      })
+
+      if (actividadError) throw actividadError
+
+      // 3. Actualizar el estado local
+      setTareasState((prevTareas) => prevTareas.filter((tarea) => tarea.id !== tareaId))
+
+      toast({
+        title: "Tarea completada",
+        description: "La tarea ha sido marcada como completada.",
+      })
     } catch (error) {
-      console.error("Error al actualizar el estado de la tarea:", error)
-      alert("Error al actualizar el estado de la tarea. Por favor, intente nuevamente.")
+      console.error("Error al completar tarea:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo completar la tarea. Intente nuevamente.",
+        variant: "destructive",
+      })
     } finally {
-      setIsUpdating(null)
+      setIsLoading((prev) => ({ ...prev, [tareaId]: false }))
+      router.refresh()
     }
   }
 
-  if (!tareas || tareas.length === 0) {
+  // Si no hay tareas, mostrar mensaje
+  if (tareasState.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">No hay tareas para mostrar.</p>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-10">
+          <div className="rounded-full bg-primary/10 p-3 mb-4">
+            <CheckCircle className="h-6 w-6 text-primary" />
+          </div>
+          <h3 className="text-xl font-medium mb-2">No hay tareas pendientes</h3>
+          <p className="text-muted-foreground text-center max-w-md">
+            Todas las tareas han sido completadas. Puedes agregar nuevas tareas desde cada expediente.
+          </p>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">Estado</TableHead>
-            <TableHead>Descripción</TableHead>
-            <TableHead>Expediente</TableHead>
-            <TableHead>Vencimiento</TableHead>
-            <TableHead className="w-12"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tareas.map((tarea) => (
-            <TableRow key={tarea.id}>
-              <TableCell>
-                <Checkbox
-                  checked={tarea.cumplida}
-                  disabled={isUpdating === tarea.id}
-                  onCheckedChange={() => handleToggleCumplida(tarea.id, tarea.cumplida)}
-                />
-              </TableCell>
-              <TableCell>
-                <div className="font-medium">{tarea.descripcion}</div>
-                {tarea.cumplida && (
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                    <CheckCircle className="mr-1 h-3 w-3" />
-                    Cumplida
-                  </Badge>
-                )}
-              </TableCell>
-              <TableCell>
-                {tarea.expediente ? (
-                  <Button
-                    variant="link"
-                    className="p-0 h-auto"
-                    onClick={() => router.push(`/expedientes/${tarea.expediente_id}`)}
-                  >
-                    {tarea.expediente.numero || tarea.expediente.autos || `#${tarea.expediente.id}`}
-                  </Button>
-                ) : (
-                  <span className="text-muted-foreground">Sin expediente</span>
-                )}
-              </TableCell>
-              <TableCell>
-                <div
-                  className={`font-medium ${new Date(tarea.fecha_vencimiento) < new Date() && !tarea.cumplida ? "text-red-600" : ""}`}
-                >
-                  {formatDate(tarea.fecha_vencimiento)}
-                </div>
-              </TableCell>
-              <TableCell>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
-                      <span className="sr-only">Abrir menú</span>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleViewTarea(tarea.id)}>
-                      <Eye className="mr-2 h-4 w-4" />
-                      Ver detalles
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleEditTarea(tarea.id)}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleDeleteTarea(tarea.id)} className="text-red-600">
-                      <Trash className="mr-2 h-4 w-4" />
-                      Eliminar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
+    <Card>
+      <CardHeader>
+        <CardTitle>Tareas pendientes</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[50px]">Estado</TableHead>
+              <TableHead>Descripción</TableHead>
+              <TableHead>Expediente</TableHead>
+              <TableHead className="w-[150px]">Vencimiento</TableHead>
+              <TableHead className="w-[100px] text-right">Acciones</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {tareasState.map((tarea) => {
+              // Calcular si la tarea está vencida
+              const fechaVencimiento = new Date(tarea.fecha_vencimiento)
+              const hoy = new Date()
+              const vencida = fechaVencimiento < hoy && !tarea.cumplida
+
+              return (
+                <TableRow key={tarea.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={tarea.cumplida}
+                      disabled={isLoading[tarea.id]}
+                      onCheckedChange={() => completarTarea(tarea.id, tarea.expediente_id, tarea.descripcion)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{tarea.descripcion}</div>
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={`/expedientes/${tarea.expediente_id}`}
+                      className="text-primary hover:underline flex items-center gap-1"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span>{tarea.expedientes.numero}</span>
+                    </Link>
+                    <div className="text-xs text-muted-foreground truncate max-w-[250px]">
+                      {tarea.expedientes.autos}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className={`${vencida ? "text-destructive font-medium" : ""}`}>
+                      {formatDate(tarea.fecha_vencimiento)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isLoading[tarea.id]}
+                      onClick={() => completarTarea(tarea.id, tarea.expediente_id, tarea.descripcion)}
+                    >
+                      {isLoading[tarea.id] ? "Procesando..." : "Completar"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 }
-
-// Exportación por defecto para mantener compatibilidad
-export default TareasTable
