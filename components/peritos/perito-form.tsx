@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { formatDNI, formatTelefono } from "@/lib/utils"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Esquema de validación
 const peritoSchema = z.object({
@@ -23,6 +24,7 @@ const peritoSchema = z.object({
   domicilio: z.string().min(1, "El domicilio es obligatorio"),
   telefono: z.string().min(1, "El teléfono es obligatorio"),
   email: z.string().email("Email inválido").min(1, "El email es obligatorio"),
+  especialidad: z.string().min(1, "La especialidad es obligatoria"),
 })
 
 type PeritoFormValues = z.infer<typeof peritoSchema>
@@ -46,6 +48,7 @@ export function PeritoForm({ perito }: PeritoFormProps) {
         domicilio: perito.domicilio,
         telefono: perito.telefono,
         email: perito.email,
+        especialidad: perito.peritos?.especialidad || "",
       }
     : {
         nombre: "",
@@ -53,6 +56,7 @@ export function PeritoForm({ perito }: PeritoFormProps) {
         domicilio: "",
         telefono: "",
         email: "",
+        especialidad: "",
       }
 
   const form = useForm<PeritoFormValues>({
@@ -125,6 +129,7 @@ export function PeritoForm({ perito }: PeritoFormProps) {
       // 2. Crear o actualizar en la tabla peritos
       const peritoData = {
         id: personaId,
+        especialidad: data.especialidad,
       }
 
       if (perito) {
@@ -135,6 +140,13 @@ export function PeritoForm({ perito }: PeritoFormProps) {
           // Crear registro en peritos si no existe
           const { error: insertPeritoError } = await supabase.from("peritos").insert(peritoData)
           if (insertPeritoError) throw insertPeritoError
+        } else {
+          // Actualizar registro existente
+          const { error: updatePeritoError } = await supabase
+            .from("peritos")
+            .update({ especialidad: data.especialidad })
+            .eq("id", personaId)
+          if (updatePeritoError) throw updatePeritoError
         }
       } else {
         // Crear nuevo perito
@@ -198,6 +210,33 @@ export function PeritoForm({ perito }: PeritoFormProps) {
                       />
                     </FormControl>
                     <FormDescription>Formato: XX.XXX.XXX</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Especialidad */}
+              <FormField
+                control={form.control}
+                name="especialidad"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Especialidad</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione una especialidad" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="1">Médico</SelectItem>
+                        <SelectItem value="2">Mecánico</SelectItem>
+                        <SelectItem value="3">Contador</SelectItem>
+                        <SelectItem value="4">Psicólogo</SelectItem>
+                        <SelectItem value="5">Calígrafo</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Seleccione la especialidad del perito</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

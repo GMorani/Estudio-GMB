@@ -24,7 +24,8 @@ export default async function EditarPeritoPage({
       email,
       domicilio,
       peritos (
-        id
+        id,
+        especialidad
       )
     `)
     .eq("id", params.id)
