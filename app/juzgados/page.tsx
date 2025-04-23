@@ -3,7 +3,7 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { Button } from "@/components/ui/button"
 import { PlusCircle } from "lucide-react"
-import { JuzgadosTable } from "@/components/juzgados/juzgados-table"
+import { JuzgadosTableFilterable } from "@/components/juzgados/juzgados-table-filterable"
 
 // Marcar la página como dinámica
 export const dynamic = "force-dynamic"
@@ -68,7 +68,7 @@ export default async function JuzgadosPage() {
           </Button>
         </div>
       ) : (
-        <JuzgadosTable juzgados={juzgadosData} />
+        <JuzgadosTableFilterable juzgados={juzgadosData} />
       )}
     </div>
   )
