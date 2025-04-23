@@ -16,7 +16,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { DatePicker } from "@/components/ui/date-picker"
 import { useToast } from "@/components/ui/use-toast"
-import { formatCurrency } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PlusCircle, Trash2 } from "lucide-react"
 
@@ -349,11 +348,17 @@ export function ExpedienteForm({
   // Manejar cambios en el monto para formatear automáticamente
   const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
-      const value = e.target.value.replace(/[^\d]/g, "")
-      if (value) {
-        const numberValue = Number.parseInt(value, 10)
+      // Eliminar cualquier carácter que no sea un número
+      const rawValue = e.target.value.replace(/[^\d]/g, "")
+
+      if (rawValue) {
+        // Convertir a número
+        const numberValue = Number.parseInt(rawValue, 10)
+
+        // Guardar el valor numérico en el formulario
         form.setValue("monto_total", String(numberValue))
       } else {
+        // Si está vacío, establecer como cadena vacía
         form.setValue("monto_total", "")
       }
     } catch (error) {
@@ -763,15 +768,26 @@ export function ExpedienteForm({
                       <FormItem>
                         <FormLabel>Monto total</FormLabel>
                         <FormControl>
-                          <Input
-                            {...field}
-                            onChange={(e) => {
-                              field.onChange(e)
-                              handleMontoChange(e)
-                            }}
-                            value={field.value ? formatCurrency(Number.parseInt(field.value, 10)) : ""}
-                          />
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                            <Input
+                              {...field}
+                              className="pl-7"
+                              onChange={(e) => {
+                                field.onChange(e)
+                                handleMontoChange(e)
+                              }}
+                              value={
+                                field.value
+                                  ? new Intl.NumberFormat("es-AR").format(Number.parseInt(field.value, 10))
+                                  : ""
+                              }
+                              placeholder="0"
+                              inputMode="numeric"
+                            />
+                          </div>
                         </FormControl>
+                        <FormDescription>Ingrese el monto total en pesos</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
