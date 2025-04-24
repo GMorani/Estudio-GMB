@@ -29,7 +29,7 @@ type Expediente = {
   numero: string
   fecha_inicio: string | null
   monto_total: number | null
-  persona_nombre: string | null
+  autos: string | null
   estados: {
     nombre: string
     color: string
@@ -77,6 +77,7 @@ export function ExpedientesTableSimple({
           numero,
           fecha_inicio,
           monto_total,
+          autos,
           expediente_personas (
             personas (
               id,
@@ -130,15 +131,12 @@ export function ExpedientesTableSimple({
         // Transformar los datos para facilitar su uso
         const formattedData =
           data?.map((exp) => {
-            // Obtener el nombre de la primera persona asociada (generalmente el cliente principal)
-            const personaNombre = exp.expediente_personas?.[0]?.personas?.nombre || "Sin persona"
-
             return {
               id: exp.id,
               numero: exp.numero,
               fecha_inicio: exp.fecha_inicio,
               monto_total: exp.monto_total,
-              persona_nombre: personaNombre,
+              autos: exp.autos || "Sin descripción",
               estados: exp.expediente_estados.map((estado: any) => ({
                 nombre: estado.estados_expediente.nombre,
                 color: estado.estados_expediente.color,
@@ -220,7 +218,7 @@ export function ExpedientesTableSimple({
             <TableRow>
               <TableHead>Número</TableHead>
               <TableHead>Fecha Inicio</TableHead>
-              <TableHead>Cliente</TableHead>
+              <TableHead>Autos</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Monto</TableHead>
               <TableHead>Acciones</TableHead>
@@ -268,7 +266,7 @@ export function ExpedientesTableSimple({
                 <TableRow key={expediente.id}>
                   <TableCell className="font-medium">{expediente.numero}</TableCell>
                   <TableCell>{formatDate(expediente.fecha_inicio)}</TableCell>
-                  <TableCell>{expediente.persona_nombre}</TableCell>
+                  <TableCell>{expediente.autos}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       {expediente.estados?.slice(0, 2).map((estado, index) => (
