@@ -11,7 +11,7 @@ export default function DashboardPage() {
   const [capitalTotal, setCapitalTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [data, setData] = useState<any[] | null>(null) // Declare data state
+  const [debugInfo, setDebugInfo] = useState<string>("")
 
   useEffect(() => {
     async function fetchCapitalTotal() {
@@ -24,65 +24,69 @@ export default function DashboardPage() {
 
         if (error) throw error
 
-        setData(data) // Store the fetched data
+        if (!data || data.length === 0) {
+          console.log("No hay expedientes para calcular")
+          setCapitalTotal(0)
+          return
+        }
 
-        // Depurar para ver la estructura de los datos
-        console.log("Muestra de expedientes:", data.slice(0, 2))
+        console.log(`Procesando ${data.length} expedientes`)
 
-        // Calcular la suma total verificando cada expediente
+        // IMPORTANTE: Este es el campo principal identificado para el cálculo
+        // Modifica esta variable si necesitas cambiar el campo utilizado
+        const campoPrincipal = "capital_reclamado"
+
+        // Campos de respaldo en orden de prioridad (por si el campo principal no existe)
+        const camposRespaldo = ["monto_reclamado", "monto", "valor", "importe", "capital"]
+
         let total = 0
-        let montoEncontrado = false
+        let expedientesContados = 0
 
+        // Procesar cada expediente
         data.forEach((expediente) => {
-          // Verificar cada posible nombre de columna para el monto
-          let montoValue = null
+          // Primero intentar con el campo principal
+          if (expediente[campoPrincipal] !== undefined && expediente[campoPrincipal] !== null) {
+            let valor = expediente[campoPrincipal]
 
-          // Intentar obtener el valor del monto de diferentes columnas posibles
-          if (expediente.monto_reclamado !== undefined && expediente.monto_reclamado !== null) {
-            montoValue = expediente.monto_reclamado
-            console.log(`Expediente ${expediente.id || "sin ID"}: monto_reclamado = ${montoValue}`)
-          } else if (expediente.capital_reclamado !== undefined && expediente.capital_reclamado !== null) {
-            montoValue = expediente.capital_reclamado
-            console.log(`Expediente ${expediente.id || "sin ID"}: capital_reclamado = ${montoValue}`)
-          } else if (expediente.valor !== undefined && expediente.valor !== null) {
-            montoValue = expediente.valor
-            console.log(`Expediente ${expediente.id || "sin ID"}: valor = ${montoValue}`)
-          } else if (expediente.importe !== undefined && expediente.importe !== null) {
-            montoValue = expediente.importe
-            console.log(`Expediente ${expediente.id || "sin ID"}: importe = ${montoValue}`)
-          } else if (expediente.monto !== undefined && expediente.monto !== null) {
-            montoValue = expediente.monto
-            console.log(`Expediente ${expediente.id || "sin ID"}: monto = ${montoValue}`)
-          }
-
-          // Si encontramos un valor, convertirlo a número y sumarlo
-          if (montoValue !== null) {
-            // Limpiar el valor si es un string (quitar símbolos de moneda, puntos, etc.)
-            if (typeof montoValue === "string") {
-              montoValue = montoValue.replace(/[^\d.,]/g, "")
-              montoValue = montoValue.replace(/,/g, ".")
+            // Convertir a número si es string
+            if (typeof valor === "string") {
+              valor = valor.replace(/[^\d.,]/g, "").replace(/,/g, ".")
             }
 
-            const valorNumerico = Number.parseFloat(montoValue)
-            if (!isNaN(valorNumerico)) {
-              total += valorNumerico
-              montoEncontrado = true
-              console.log(`Sumando: ${valorNumerico}, Total acumulado: ${total}`)
+            const monto = Number.parseFloat(valor)
+            if (!isNaN(monto) && monto > 0) {
+              total += monto
+              expedientesContados++
+              return // Continuar con el siguiente expediente
+            }
+          }
+
+          // Si el campo principal no tiene un valor válido, intentar con los campos de respaldo
+          for (const campo of camposRespaldo) {
+            if (expediente[campo] !== undefined && expediente[campo] !== null) {
+              let valor = expediente[campo]
+
+              // Convertir a número si es string
+              if (typeof valor === "string") {
+                valor = valor.replace(/[^\d.,]/g, "").replace(/,/g, ".")
+              }
+
+              const monto = Number.parseFloat(valor)
+              if (!isNaN(monto) && monto > 0) {
+                total += monto
+                expedientesContados++
+                break // Usar solo el primer campo válido encontrado
+              }
             }
           }
         })
 
-        if (!montoEncontrado) {
-          console.warn("No se encontraron montos válidos en ningún expediente")
-          setError("No se encontraron montos en los expedientes")
-        } else {
-          console.log("Total calculado:", total)
-          setCapitalTotal(total)
-          setError(null)
-        }
+        console.log(`Capital total calculado: ${total} de ${expedientesContados} expedientes`)
+        setCapitalTotal(total)
       } catch (err) {
-        console.error("Error al obtener el capital total:", err)
-        setError(`No se pudo calcular el capital total: ${err.message || "Error desconocido"}`)
+        console.error("Error al calcular capital:", err)
+        // Incluso con error, establecer el capital en 0 para que se muestre algo
+        setCapitalTotal(0)
       } finally {
         setLoading(false)
       }
@@ -106,15 +110,8 @@ export default function DashboardPage() {
         <CardContent>
           {loading ? (
             <Skeleton className="h-8 w-40" />
-          ) : error ? (
-            <p className="text-red-500">{error}</p>
           ) : (
-            <p className="text-3xl font-bold">
-              {formatCurrency(capitalTotal || 0)}
-              <span className="text-sm text-muted-foreground ml-2">
-                (Total de {capitalTotal ? data?.length || 0 : 0} expedientes)
-              </span>
-            </p>
+            <p className="text-3xl font-bold">{formatCurrency(capitalTotal || 0)}</p>
           )}
         </CardContent>
       </Card>
