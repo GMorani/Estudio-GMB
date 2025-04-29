@@ -27,6 +27,8 @@ const expedienteSchema = z.object({
     required_error: "La fecha de inicio es obligatoria",
   }),
   fecha_inicio_judicial: z.date().optional(),
+  fecha_hecho: z.date().optional(),
+  mecanica_hecho: z.string().optional(),
   monto_total: z.string().optional(),
   juzgado_id: z.string().optional(),
   objeto: z.string().min(1, "El objeto es obligatorio"),
@@ -122,6 +124,8 @@ export function ExpedienteForm({
           fecha_inicio_judicial: expediente.fecha_inicio_judicial
             ? new Date(expediente.fecha_inicio_judicial)
             : undefined,
+          fecha_hecho: expediente.fecha_hecho ? new Date(expediente.fecha_hecho) : undefined,
+          mecanica_hecho: expediente.mecanica_hecho || "",
           monto_total: expediente.monto_total ? String(expediente.monto_total) : "",
           juzgado_id: expediente.juzgado_id || "",
           // Asegurar que el objeto tenga un valor por defecto válido
@@ -136,6 +140,8 @@ export function ExpedienteForm({
           numero: "",
           numero_judicial: "",
           fecha_inicio: new Date(),
+          fecha_hecho: undefined,
+          mecanica_hecho: "",
           monto_total: "",
           juzgado_id: "",
           objeto: OBJETOS_DISPONIBLES[0].value, // Establecer un valor por defecto
@@ -539,6 +545,22 @@ export function ExpedienteForm({
         autos: data.autos,
       }
 
+      // Almacenar los datos adicionales en localStorage para referencia futura
+      // Esto es opcional y se puede eliminar si no se necesita
+      if (data.fecha_hecho || data.mecanica_hecho) {
+        try {
+          const datosAdicionales = {
+            fecha_hecho: data.fecha_hecho?.toISOString() || null,
+            mecanica_hecho: data.mecanica_hecho || null,
+          }
+
+          // Guardar en localStorage usando el número de expediente como clave
+          localStorage.setItem(`expediente_adicional_${data.numero}`, JSON.stringify(datosAdicionales))
+        } catch (error) {
+          console.log("No se pudieron guardar los datos adicionales en localStorage", error)
+        }
+      }
+
       let expedienteId
 
       if (expediente) {
@@ -728,6 +750,40 @@ export function ExpedienteForm({
                       <FormItem className="flex flex-col">
                         <FormLabel>Fecha de inicio judicial</FormLabel>
                         <DatePicker date={field.value} setDate={field.onChange} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Fecha del Hecho */}
+                  <FormField
+                    control={form.control}
+                    name="fecha_hecho"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>Fecha del Hecho</FormLabel>
+                        <DatePicker date={field.value} setDate={field.onChange} />
+                        <FormDescription>
+                          Este campo es solo informativo y no se guarda en la base de datos
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Mecánica del Hecho */}
+                  <FormField
+                    control={form.control}
+                    name="mecanica_hecho"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>Mecánica del Hecho</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Describa cómo ocurrió el hecho (solo informativo, no se guarda en la base de datos)
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
