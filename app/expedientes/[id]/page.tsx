@@ -18,6 +18,10 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
   const [actividades, setActividades] = useState([])
   const [loading, setLoading] = useState(true)
   const [nuevaActividad, setNuevaActividad] = useState(null)
+  const [datosAdicionales, setDatosAdicionales] = useState<{
+    fechaHecho?: string | null
+    mecanicaHecho?: string | null
+  }>({})
   const supabase = createClientComponentClient()
 
   // Función para cargar los datos del expediente
@@ -121,6 +125,20 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
     cargarDatos()
   }, [params.id, supabase])
 
+  // Cargar datos adicionales desde localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined" && params.id) {
+      try {
+        const storedData = localStorage.getItem(`expediente_${params.id}_datos_adicionales`)
+        if (storedData) {
+          setDatosAdicionales(JSON.parse(storedData))
+        }
+      } catch (error) {
+        console.error("Error al cargar datos adicionales:", error)
+      }
+    }
+  }, [params.id])
+
   // Función para manejar cuando se completa una tarea
   const handleTareaCompletada = (actividad) => {
     setNuevaActividad(actividad)
@@ -193,6 +211,12 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
                     <p>{formatDate(expediente.fecha_inicio_judicial)}</p>
                   </div>
                 )}
+                {datosAdicionales.fechaHecho && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Fecha del Hecho</p>
+                    <p>{formatDate(new Date(datosAdicionales.fechaHecho))}</p>
+                  </div>
+                )}
                 {expediente.monto_total && (
                   <div>
                     <p className="text-sm text-muted-foreground">Monto Total</p>
@@ -212,6 +236,13 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
                   </div>
                 )}
               </div>
+
+              {datosAdicionales.mecanicaHecho && (
+                <div className="mt-4">
+                  <p className="text-sm text-muted-foreground">Mecánica del Hecho</p>
+                  <p className="whitespace-pre-wrap">{datosAdicionales.mecanicaHecho}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
