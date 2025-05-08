@@ -5,7 +5,6 @@ import "./globals.css"
 import { Sidebar } from "@/components/ui/sidebar"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
-import { OfflineStatus } from "@/components/offline-status"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -29,10 +28,6 @@ export default function RootLayout({
               <Sidebar />
             </div>
             <div className="flex-1 overflow-auto">
-              <header className="border-b p-4 flex justify-between items-center">
-                <h1 className="text-xl font-semibold">Estudio GMB</h1>
-                <OfflineStatus />
-              </header>
               <main className="p-4">{children}</main>
             </div>
           </div>

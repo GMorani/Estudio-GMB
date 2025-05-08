@@ -2,22 +2,40 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { useRouter } from "next/navigation"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { RefreshCw, FileText, AlertTriangle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Eye, Pencil, Trash2 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { formatDate, formatCurrency } from "@/lib/utils"
+import { ExpedientesFilter } from "@/components/expedientes/expedientes-filter"
 import { useToast } from "@/components/ui/use-toast"
 
-// Tipo para los expedientes
-interface Expediente {
+type Expediente = {
   id: string
-  numero_expediente: string
-  autos: string
-  estado: string
-  fecha_alta: string
+  numero: string
+  fecha_inicio: string | null
+  monto_total: number | null
+  autos: string | null
+  estados: {
+    nombre: string
+    color: string
+  }[]
 }
 
-// Componente principal
 export function ExpedientesTableSimple({
   searchParams,
 }: {
@@ -26,177 +44,298 @@ export function ExpedientesTableSimple({
   const [expedientes, setExpedientes] = useState<Expediente[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isConnected, setIsConnected] = useState(false)
-  const [isRetrying, setIsRetrying] = useState(false)
+  const router = useRouter()
+  const supabase = createClientComponentClient()
   const { toast } = useToast()
 
-  // Cargar datos al inicio
+  // Obtener parámetros de búsqueda
+  const numero = searchParams?.numero as string
+  const personaId = searchParams?.persona as string
+  const estadoId = searchParams?.estado as string
+  const tipo = searchParams?.tipo as string
+  const ordenarPor = searchParams?.ordenarPor as string
+  const ordenAscendente = searchParams?.ordenAscendente === "true"
+
   useEffect(() => {
-    // Intentar cargar desde localStorage primero
-    try {
-      const cachedData = localStorage.getItem("expedientes_data")
-      if (cachedData) {
-        setExpedientes(JSON.parse(cachedData))
-        setLoading(false)
-      }
-    } catch (err) {
-      console.error("Error al cargar datos de caché:", err)
-    }
+    async function fetchExpedientes() {
+      setLoading(true)
+      setError(null)
 
-    // Intentar cargar datos frescos
-    loadExpedientes()
-  }, [searchParams])
+      try {
+        console.log("Cargando expedientes con filtros:", {
+          numero,
+          personaId,
+          estadoId,
+          tipo,
+          ordenarPor,
+          ordenAscendente,
+        })
 
-  // Función para cargar expedientes
-  const loadExpedientes = async () => {
-    if (isRetrying) return
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Importar dinámicamente para evitar errores durante la carga inicial
-      const { createClientComponentClient } = await import("@supabase/auth-helpers-nextjs")
-      const supabase = createClientComponentClient()
-
-      // Construir la consulta
-      let query = supabase
-        .from("expedientes")
-        .select(`
+        // Construir la consulta base
+        let query = supabase.from("expedientes").select(`
           id,
-          numero_expediente,
+          numero,
+          fecha_inicio,
+          monto_total,
           autos,
-          estado,
-          fecha_alta
+          expediente_personas (
+            personas (
+              id,
+              nombre
+            )
+          ),
+          expediente_estados (
+            estados_expediente (
+              id,
+              nombre,
+              color
+            )
+          )
         `)
-        .order("fecha_alta", { ascending: false })
 
-      // Aplicar filtros si existen
-      if (searchParams.estado) {
-        query = query.eq("estado", searchParams.estado)
-      }
+        // Aplicar filtros
+        if (numero) {
+          query = query.ilike("numero", `%${numero}%`)
+        }
 
-      // Ejecutar la consulta
-      const { data, error } = await query.limit(50)
+        if (personaId && personaId !== "all") {
+          query = query.filter("expediente_personas.persona_id", "eq", personaId)
+        }
 
-      if (error) throw error
+        if (estadoId && estadoId !== "all") {
+          query = query.filter("expediente_estados.estado_id", "eq", estadoId)
+        }
 
-      // Actualizar el estado
-      setExpedientes(data || [])
-      setIsConnected(true)
+        // Filtrar por tipo (activos, archivados, todos)
+        if (tipo === "activos") {
+          // Asumiendo que hay un estado "Archivado" con ID 5 (ajustar según tu base de datos)
+          query = query.not("expediente_estados.estado_id", "eq", 5)
+        } else if (tipo === "archivados") {
+          query = query.filter("expediente_estados.estado_id", "eq", 5)
+        }
 
-      // Guardar en localStorage para uso offline
-      localStorage.setItem("expedientes_data", JSON.stringify(data || []))
-    } catch (err: any) {
-      console.error("Error al cargar expedientes:", err)
-      setError(err.message || "Error al cargar expedientes")
-      setIsConnected(false)
+        // Ordenar
+        const sortBy = ordenarPor || "fecha_inicio"
+        const ascending = ordenAscendente !== undefined ? ordenAscendente : false
+        query = query.order(sortBy, { ascending })
 
-      // Solo mostrar toast si no hay datos en caché
-      if (expedientes.length === 0) {
+        // Limitar resultados para evitar problemas de rendimiento
+        query = query.limit(100)
+
+        const { data, error: queryError } = await query
+
+        if (queryError) throw queryError
+
+        console.log("Expedientes cargados:", data?.length || 0)
+
+        // Transformar los datos para facilitar su uso
+        const formattedData =
+          data?.map((exp) => {
+            return {
+              id: exp.id,
+              numero: exp.numero,
+              fecha_inicio: exp.fecha_inicio,
+              monto_total: exp.monto_total,
+              autos: exp.autos || "Sin descripción",
+              estados: exp.expediente_estados.map((estado: any) => ({
+                nombre: estado.estados_expediente.nombre,
+                color: estado.estados_expediente.color,
+              })),
+            }
+          }) || []
+
+        setExpedientes(formattedData)
+      } catch (err: any) {
+        console.error("Error al cargar expedientes:", err)
+        setError(err.message || "Error al cargar expedientes")
+
         toast({
-          title: "Error de conexión",
-          description: "No se pudieron cargar los expedientes. Se muestran datos en caché si están disponibles.",
+          title: "Error",
+          description: "No se pudieron cargar los expedientes. Por favor, intenta nuevamente.",
           variant: "destructive",
         })
+      } finally {
+        setLoading(false)
       }
-    } finally {
-      setLoading(false)
-      setIsRetrying(false)
+    }
+
+    fetchExpedientes()
+  }, [supabase, numero, personaId, estadoId, tipo, ordenarPor, ordenAscendente, toast])
+
+  // Función para eliminar un expediente
+  const eliminarExpediente = async (id: string) => {
+    try {
+      // 1. Eliminar relaciones en expediente_personas
+      const { error: errorPersonas } = await supabase.from("expediente_personas").delete().eq("expediente_id", id)
+      if (errorPersonas) throw errorPersonas
+
+      // 2. Eliminar relaciones en expediente_estados
+      const { error: errorEstados } = await supabase.from("expediente_estados").delete().eq("expediente_id", id)
+      if (errorEstados) throw errorEstados
+
+      // 3. Eliminar actividades relacionadas
+      const { error: errorActividades } = await supabase.from("actividades_expediente").delete().eq("expediente_id", id)
+      if (errorActividades) throw errorActividades
+
+      // 4. Eliminar tareas relacionadas
+      const { error: errorTareas } = await supabase.from("tareas_expediente").delete().eq("expediente_id", id)
+      if (errorTareas) throw errorTareas
+
+      // 5. Finalmente, eliminar el expediente
+      const { error: errorExpediente } = await supabase.from("expedientes").delete().eq("id", id)
+      if (errorExpediente) throw errorExpediente
+
+      // Actualizar la lista de expedientes
+      setExpedientes(expedientes.filter((exp) => exp.id !== id))
+
+      toast({
+        title: "Expediente eliminado",
+        description: "El expediente ha sido eliminado correctamente",
+      })
+    } catch (error: any) {
+      console.error("Error al eliminar expediente:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el expediente. Por favor, intenta nuevamente.",
+        variant: "destructive",
+      })
     }
   }
 
-  // Función para reintentar la carga
-  const handleRetry = () => {
-    setIsRetrying(true)
-    loadExpedientes()
-  }
-
-  // Si no hay datos y hay un error, mostrar mensaje de error
-  if (expedientes.length === 0 && error) {
-    return (
-      <Card className="p-6 text-center">
-        <div className="flex justify-center mb-4">
-          <AlertTriangle className="h-12 w-12 text-amber-500" />
-        </div>
-        <h2 className="text-xl font-semibold mb-2">No se pudieron cargar los expedientes</h2>
-        <p className="text-muted-foreground mb-4">{error}</p>
-        <Button onClick={handleRetry} disabled={isRetrying}>
-          {isRetrying ? (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Intentando...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Reintentar
-            </>
-          )}
-        </Button>
-      </Card>
-    )
-  }
-
-  // Si está cargando y no hay datos en caché, mostrar esqueletos
-  if (loading && expedientes.length === 0) {
-    return (
-      <div className="space-y-4">
-        {[...Array(5)].map((_, i) => (
-          <Card key={i} className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-[250px]" />
-                <Skeleton className="h-4 w-[200px]" />
-              </div>
-              <Skeleton className="h-10 w-[100px]" />
-            </div>
-          </Card>
-        ))}
-      </div>
-    )
-  }
-
-  // Renderizar la lista de expedientes
   return (
     <div className="space-y-4">
-      {!isConnected && expedientes.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-amber-800 text-sm flex items-center mb-4">
-          <AlertTriangle className="h-4 w-4 mr-2 flex-shrink-0" />
-          <span>Mostrando datos guardados localmente. </span>
-          <Button
-            variant="link"
-            className="p-0 h-auto text-amber-800 underline ml-1"
-            onClick={handleRetry}
-            disabled={isRetrying}
-          >
-            {isRetrying ? "Actualizando..." : "Actualizar ahora"}
-          </Button>
+      <ExpedientesFilter />
+
+      {error && (
+        <div className="rounded-md bg-destructive/10 p-4 text-destructive">
+          <p>{error}</p>
         </div>
       )}
 
-      {expedientes.map((expediente) => (
-        <Card key={expediente.id} className="p-4 hover:bg-muted/50 transition-colors">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-medium">
-                <Link href={`/expedientes/${expediente.id}`} className="hover:underline">
-                  {expediente.autos || "Expediente sin título"}
-                </Link>
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Nº {expediente.numero_expediente} • Estado: {expediente.estado}
-              </p>
-            </div>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/expedientes/${expediente.id}`}>
-                <FileText className="h-4 w-4 mr-2" />
-                Ver
-              </Link>
-            </Button>
-          </div>
-        </Card>
-      ))}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Número</TableHead>
+              <TableHead>Fecha Inicio</TableHead>
+              <TableHead>Autos</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Monto</TableHead>
+              <TableHead>Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              // Renderizar esqueletos si está cargando
+              [...Array(5)].map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <Skeleton className="h-5 w-20" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-32" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-24" />
+                  </TableCell>
+                  <TableCell>
+                    <Skeleton className="h-5 w-16" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-8 w-8" />
+                      <Skeleton className="h-8 w-8" />
+                      <Skeleton className="h-8 w-8" />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : expedientes.length === 0 ? (
+              // Mensaje si no hay expedientes
+              <TableRow>
+                <TableCell colSpan={6} className="text-center">
+                  No se encontraron expedientes
+                </TableCell>
+              </TableRow>
+            ) : (
+              // Renderizar expedientes
+              expedientes.map((expediente) => (
+                <TableRow key={expediente.id}>
+                  <TableCell className="font-medium">{expediente.numero}</TableCell>
+                  <TableCell>{formatDate(expediente.fecha_inicio)}</TableCell>
+                  <TableCell>{expediente.autos}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {expediente.estados?.slice(0, 2).map((estado, index) => (
+                        <Badge
+                          key={index}
+                          variant="outline"
+                          style={{
+                            backgroundColor: estado.color ? `${estado.color}20` : undefined,
+                            color: estado.color,
+                            borderColor: estado.color,
+                          }}
+                        >
+                          {estado.nombre}
+                        </Badge>
+                      ))}
+                      {(expediente.estados?.length || 0) > 2 && (
+                        <Badge variant="outline">+ {expediente.estados.length - 2}</Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">{formatCurrency(expediente.monto_total)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="icon" asChild>
+                        <Link href={`/expedientes/${expediente.id}`}>
+                          <Eye className="h-4 w-4" />
+                          <span className="sr-only">Ver</span>
+                        </Link>
+                      </Button>
+                      <Button variant="ghost" size="icon" asChild>
+                        <Link href={`/expedientes/${expediente.id}/editar`}>
+                          <Pencil className="h-4 w-4" />
+                          <span className="sr-only">Editar</span>
+                        </Link>
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Eliminar</span>
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta acción no se puede deshacer. Se eliminará permanentemente el expediente y todas sus
+                              relaciones.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => eliminarExpediente(expediente.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              Eliminar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   )
 }

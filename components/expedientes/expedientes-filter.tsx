@@ -2,20 +2,21 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, WifiOff, RefreshCw } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useOfflineService } from "@/lib/offline-service"
+import { Loader2 } from "lucide-react"
 
-export function ExpedientesFilter({ onFilterChange }: { onFilterChange?: (filters: any) => void }) {
-  const { state, service } = useOfflineService()
+export function ExpedientesFilter() {
+  const [personas, setPersonas] = useState<{ id: string; nombre: string }[]>([])
+  const [estados, setEstados] = useState<{ id: string; nombre: string }[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
   const router = useRouter()
   const searchParams = useSearchParams()
+  const supabase = createClientComponentClient()
   const { toast } = useToast()
 
   // Obtener parámetros de búsqueda actuales
@@ -31,50 +32,43 @@ export function ExpedientesFilter({ onFilterChange }: { onFilterChange?: (filter
   const [personaFilter, setPersonaFilter] = useState(persona)
   const [estadoFilter, setEstadoFilter] = useState(estado)
 
-  // Estado para las opciones
-  const [personas, setPersonas] = useState<{ id: string; nombre: string }[]>([])
-  const [estados, setEstados] = useState<{ id: string; nombre: string }[]>([])
-
-  // Cargar opciones desde el servicio offline
   useEffect(() => {
-    async function loadOptions() {
+    async function fetchOptions() {
       setLoadingOptions(true)
       try {
-        // Obtener clientes del servicio offline
-        const clientes = service.getCachedData<any>("clientes")
-        if (clientes.length > 0) {
-          setPersonas(
-            clientes.map((cliente: any) => ({
-              id: cliente.id,
-              nombre: cliente.nombre,
-            })),
-          )
-        }
+        // Obtener personas (clientes)
+        const { data: personasData, error: personasError } = await supabase
+          .from("personas")
+          .select("id, nombre")
+          .eq("tipo_id", 1) // Tipo cliente
+          .order("nombre")
 
-        // Obtener estados del servicio offline
-        const estados = service.getCachedData<any>("estados")
-        if (estados.length > 0) {
-          setEstados(
-            estados.map((estado: any) => ({
-              id: estado.id,
-              nombre: estado.nombre,
-            })),
-          )
-        }
+        if (personasError) throw personasError
 
-        // Si no hay datos y estamos online, intentar sincronizar
-        if ((clientes.length === 0 || estados.length === 0) && state?.isOnline) {
-          await service.syncData()
-        }
-      } catch (err) {
-        console.error("Error al cargar opciones:", err)
+        // Obtener estados
+        const { data: estadosData, error: estadosError } = await supabase
+          .from("estados_expediente")
+          .select("id, nombre")
+          .order("nombre")
+
+        if (estadosError) throw estadosError
+
+        setPersonas(personasData || [])
+        setEstados(estadosData || [])
+      } catch (error) {
+        console.error("Error al cargar opciones de filtro:", error)
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar las opciones de filtro.",
+          variant: "destructive",
+        })
       } finally {
         setLoadingOptions(false)
       }
     }
 
-    loadOptions()
-  }, [service, state?.isOnline, state?.lastSyncTime])
+    fetchOptions()
+  }, [supabase, toast])
 
   // Actualizar la URL con los parámetros de búsqueda
   const applyFilters = () => {
@@ -89,51 +83,11 @@ export function ExpedientesFilter({ onFilterChange }: { onFilterChange?: (filter
     params.set("ordenarPor", ordenarPor)
     params.set("ordenAscendente", String(ordenAscendente))
 
-    // Si hay una función de callback para cambios de filtro, llamarla
-    if (onFilterChange) {
-      onFilterChange({
-        numero: numeroFilter,
-        persona: personaFilter,
-        estado: estadoFilter,
-        tipo,
-        ordenarPor,
-        ordenAscendente,
-      })
-    }
-
     router.push(`/expedientes?${params.toString()}`)
-  }
-
-  // Forzar sincronización
-  const handleSync = async () => {
-    if (!state?.isOnline) {
-      toast({
-        title: "Sin conexión",
-        description: "No es posible sincronizar en modo offline.",
-        variant: "warning",
-      })
-      return
-    }
-
-    setLoadingOptions(true)
-    try {
-      await service.forceSyncData()
-    } finally {
-      setLoadingOptions(false)
-    }
   }
 
   return (
     <div className="space-y-4">
-      {!state?.isOnline && (
-        <Alert variant="warning" className="bg-amber-50 border-amber-200 text-amber-800">
-          <WifiOff className="h-4 w-4 mr-2" />
-          <AlertDescription>
-            Estás en modo offline. Los filtros funcionarán con datos almacenados localmente.
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <Label htmlFor="numero">Número</Label>
@@ -181,25 +135,7 @@ export function ExpedientesFilter({ onFilterChange }: { onFilterChange?: (filter
         </div>
       </div>
 
-      <div className="flex justify-between">
-        <Button
-          variant="outline"
-          onClick={handleSync}
-          disabled={loadingOptions || !state?.isOnline || state?.syncInProgress}
-        >
-          {state?.syncInProgress ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Sincronizando...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Sincronizar
-            </>
-          )}
-        </Button>
-
+      <div className="flex justify-end">
         <Button onClick={applyFilters} disabled={loadingOptions}>
           {loadingOptions && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Aplicar Filtros
