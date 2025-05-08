@@ -38,14 +38,14 @@ export type OfflineState = {
   pendingOperations: PendingOperation[]
   data: OfflineData
   syncInProgress: boolean
-  forcedOfflineMode: boolean
+  connectionStatus: "checking" | "connected" | "disconnected" | "error"
+  lastError?: string
 }
 
 // Claves para localStorage
 const STORAGE_KEYS = {
   OFFLINE_STATE: "gmb_offline_state",
   PENDING_OPERATIONS: "gmb_pending_operations",
-  FORCED_OFFLINE_MODE: "gmb_forced_offline_mode",
 }
 
 // Estado inicial
@@ -55,7 +55,7 @@ const initialState: OfflineState = {
   pendingOperations: [],
   data: {},
   syncInProgress: false,
-  forcedOfflineMode: true, // Comenzar siempre en modo offline forzado
+  connectionStatus: "checking",
 }
 
 // Datos de ejemplo para usar cuando no hay conexión
@@ -170,38 +170,64 @@ const EXAMPLE_DATA: OfflineData = {
   ],
 }
 
+// Función para retrasar la ejecución
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 // Clase principal del servicio offline
 export class OfflineService {
   private static instance: OfflineService
   private state: OfflineState
   private listeners: Set<(state: OfflineState) => void>
-  private supabase = createClientComponentClient()
+  private supabase
   private maxRetries = 3
   private syncLock = false
+  private syncInterval: NodeJS.Timeout | null = null
+  private connectionCheckInterval: NodeJS.Timeout | null = null
+  private retryDelay = 1000 // ms
+  private connectionCheckAttempts = 0
+  private maxConnectionCheckAttempts = 3
 
   private constructor() {
     // Inicializar estado desde localStorage o usar el inicial
     const savedState = this.loadStateFromStorage()
-
-    // Verificar si el modo offline forzado está activado en localStorage
-    const forcedOfflineMode = this.loadForcedOfflineMode()
-
     this.state = savedState || { ...initialState }
-
-    // Asegurar que el modo offline forzado se respete
-    this.state.forcedOfflineMode = forcedOfflineMode !== null ? forcedOfflineMode : initialState.forcedOfflineMode
-
     this.listeners = new Set()
+
+    // Inicializar con datos de ejemplo inmediatamente para asegurar que siempre haya datos
+    if (Object.keys(this.state.data).length === 0) {
+      this.state.data = { ...EXAMPLE_DATA }
+      this.saveStateToStorage()
+    }
+
+    // Inicializar Supabase con manejo de errores
+    try {
+      this.supabase = createClientComponentClient()
+    } catch (error) {
+      console.error("Error al inicializar Supabase:", error)
+      this.updateConnectionStatus("error", "Error al inicializar el cliente de Supabase")
+    }
 
     // Configurar event listeners para detectar cambios en la conexión
     window.addEventListener("online", this.handleOnline)
     window.addEventListener("offline", this.handleOffline)
 
-    // Inicializar con datos de ejemplo si no hay datos
-    if (Object.keys(this.state.data).length === 0) {
-      this.state.data = { ...EXAMPLE_DATA }
-      this.saveStateToStorage()
-    }
+    // Verificar conexión después de un pequeño retraso
+    setTimeout(() => {
+      this.checkConnection().catch(() => {
+        // Si falla la verificación, asegurarse de que estamos en modo offline
+        this.updateConnectionStatus("error", "No se pudo conectar con Supabase")
+      })
+    }, 1000)
+
+    // Configurar intervalo para verificar conexión periódicamente
+    this.connectionCheckInterval = setInterval(() => {
+      if (this.state.isOnline) {
+        this.checkConnection().catch(() => {
+          // Si falla la verificación, asegurarse de que estamos en modo offline
+          this.updateConnectionStatus("error", "No se pudo conectar con Supabase")
+        })
+      }
+    }, 60000) // Verificar cada minuto
   }
 
   // Patrón Singleton para asegurar una única instancia
@@ -225,28 +251,87 @@ export class OfflineService {
     return null
   }
 
-  // Cargar configuración de modo offline forzado
-  private loadForcedOfflineMode(): boolean | null {
-    try {
-      const forcedMode = localStorage.getItem(STORAGE_KEYS.FORCED_OFFLINE_MODE)
-      if (forcedMode !== null) {
-        return JSON.parse(forcedMode)
-      }
-    } catch (error) {
-      console.error("Error al cargar modo offline forzado:", error)
-    }
-    return null
-  }
-
   // Guardar estado en localStorage
   private saveStateToStorage() {
     try {
       localStorage.setItem(STORAGE_KEYS.OFFLINE_STATE, JSON.stringify(this.state))
-      // Guardar también el modo offline forzado por separado
-      localStorage.setItem(STORAGE_KEYS.FORCED_OFFLINE_MODE, JSON.stringify(this.state.forcedOfflineMode))
     } catch (error) {
       console.error("Error al guardar estado offline:", error)
     }
+  }
+
+  // Verificar conexión a Supabase
+  private async checkConnection() {
+    if (!this.state.isOnline) {
+      this.updateConnectionStatus("disconnected")
+      return false
+    }
+
+    this.updateConnectionStatus("checking")
+
+    // Si no se pudo inicializar Supabase, no intentar la conexión
+    if (!this.supabase) {
+      this.updateConnectionStatus("error", "Cliente de Supabase no inicializado")
+      return false
+    }
+
+    try {
+      // Usar AbortController para manejar timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000)
+
+      try {
+        // Intentar una consulta simple que no requiera mucho procesamiento
+        const { data, error } = await this.supabase
+          .from("estados_expediente")
+          .select("id")
+          .limit(1)
+          .abortSignal(controller.signal)
+
+        clearTimeout(timeoutId)
+
+        if (error) {
+          console.error("Error al verificar conexión:", error)
+
+          // Forzar modo offline si hay un error de conexión
+          this.updateConnectionStatus("error", error.message)
+          return false
+        }
+
+        // Resetear contador de intentos si la conexión es exitosa
+        this.connectionCheckAttempts = 0
+        this.updateConnectionStatus("connected")
+
+        // Si es la primera conexión exitosa, iniciar sincronización
+        if (this.state.lastSyncTime === null) {
+          this.syncData()
+        }
+
+        return true
+      } catch (error: any) {
+        clearTimeout(timeoutId)
+        console.error("Excepción al verificar conexión:", error)
+
+        // Forzar modo offline para cualquier error
+        this.updateConnectionStatus("error", error.message || "Error desconocido")
+        return false
+      }
+    } catch (error: any) {
+      console.error("Error inesperado al verificar conexión:", error)
+      this.updateConnectionStatus("error", error.message || "Error desconocido")
+      return false
+    }
+  }
+
+  // Actualizar estado de conexión
+  private updateConnectionStatus(status: OfflineState["connectionStatus"], error?: string) {
+    this.state = {
+      ...this.state,
+      connectionStatus: status,
+      lastError: error,
+    }
+    this.saveStateToStorage()
+    this.notifyListeners()
   }
 
   // Manejadores de eventos de conexión
@@ -258,28 +343,63 @@ export class OfflineService {
     this.saveStateToStorage()
     this.notifyListeners()
 
-    // Solo mostrar notificación si no estamos en modo offline forzado
-    if (!this.state.forcedOfflineMode) {
-      toast({
-        title: "Conexión restablecida",
-        description: "Se ha restablecido la conexión a internet.",
-      })
-    }
+    // Resetear contador de intentos cuando volvemos a estar online
+    this.connectionCheckAttempts = 0
+
+    // Verificar conexión a Supabase
+    this.checkConnection().then((connected) => {
+      if (connected) {
+        toast({
+          title: "Conexión restablecida",
+          description: "Se ha restablecido la conexión a internet y a la base de datos.",
+        })
+        // Iniciar sincronización automática
+        this.startSyncInterval()
+      } else {
+        toast({
+          title: "Conexión limitada",
+          description: "Hay conexión a internet pero no se puede acceder a la base de datos.",
+          variant: "warning",
+        })
+      }
+    })
   }
 
   private handleOffline = () => {
     this.state = {
       ...this.state,
       isOnline: false,
+      connectionStatus: "disconnected",
     }
     this.saveStateToStorage()
     this.notifyListeners()
-
+    this.stopSyncInterval()
     toast({
       title: "Sin conexión",
-      description: "Trabajando en modo offline. Los cambios se guardarán localmente.",
+      description: "Trabajando en modo offline. Los cambios se sincronizarán cuando se restablezca la conexión.",
       variant: "destructive",
     })
+  }
+
+  // Iniciar intervalo de sincronización
+  private startSyncInterval() {
+    if (!this.syncInterval) {
+      // Sincronizar cada 5 minutos
+      this.syncInterval = setInterval(
+        () => {
+          this.syncData()
+        },
+        5 * 60 * 1000,
+      )
+    }
+  }
+
+  // Detener intervalo de sincronización
+  private stopSyncInterval() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval)
+      this.syncInterval = null
+    }
   }
 
   // Notificar a todos los listeners de cambios en el estado
@@ -305,45 +425,13 @@ export class OfflineService {
     return this.state
   }
 
-  // Verificar si hay conexión a internet
-  public isOnline(): boolean {
-    return this.state.isOnline && !this.state.forcedOfflineMode
+  // Verificar si hay conexión a internet y a Supabase
+  public isConnected(): boolean {
+    return this.state.isOnline && this.state.connectionStatus === "connected"
   }
 
-  // Activar o desactivar el modo offline forzado
-  public setForcedOfflineMode(forced: boolean): void {
-    this.state = {
-      ...this.state,
-      forcedOfflineMode: forced,
-    }
-    this.saveStateToStorage()
-    this.notifyListeners()
-
-    if (forced) {
-      toast({
-        title: "Modo offline activado",
-        description: "La aplicación funcionará sin intentar conectarse a la base de datos.",
-      })
-    } else {
-      toast({
-        title: "Modo offline desactivado",
-        description: "La aplicación intentará conectarse a la base de datos cuando sea necesario.",
-      })
-    }
-  }
-
-  // Sincronizar datos con Supabase (solo cuando se solicita explícitamente)
+  // Sincronizar datos con Supabase
   public async syncData(): Promise<boolean> {
-    // Si estamos en modo offline forzado, no permitir sincronización
-    if (this.state.forcedOfflineMode) {
-      toast({
-        title: "Sincronización no disponible",
-        description: "La sincronización no está disponible en modo offline forzado.",
-        variant: "destructive",
-      })
-      return false
-    }
-
     // Evitar sincronizaciones simultáneas
     if (this.syncLock || this.state.syncInProgress) {
       console.log("Sincronización ya en progreso, saltando...")
@@ -351,11 +439,6 @@ export class OfflineService {
     }
 
     if (!this.state.isOnline) {
-      toast({
-        title: "Sin conexión",
-        description: "No se puede sincronizar sin conexión a internet.",
-        variant: "destructive",
-      })
       return false
     }
 
@@ -368,17 +451,12 @@ export class OfflineService {
     this.notifyListeners()
 
     try {
-      toast({
-        title: "Sincronizando",
-        description: "Intentando sincronizar con la base de datos...",
-      })
+      // Verificar conexión a Supabase
+      const connected = await this.checkConnection()
 
-      // Intentar una operación simple para verificar la conexión
-      const { count } = await this.supabase
-        .from("estados_expediente")
-        .select("*", { count: "exact", head: true })
-        .limit(1)
-        .throwOnError()
+      if (!connected) {
+        throw new Error("No se pudo conectar con Supabase")
+      }
 
       // Sincronizar operaciones pendientes primero
       await this.syncPendingOperations()
@@ -395,11 +473,6 @@ export class OfflineService {
       this.saveStateToStorage()
       this.notifyListeners()
 
-      toast({
-        title: "Sincronización completada",
-        description: "Los datos se han sincronizado correctamente.",
-      })
-
       return true
     } catch (error) {
       console.error("Error al sincronizar datos:", error)
@@ -411,12 +484,6 @@ export class OfflineService {
       this.saveStateToStorage()
       this.notifyListeners()
 
-      toast({
-        title: "Error de sincronización",
-        description: "No se pudo conectar con la base de datos. Trabajando en modo offline.",
-        variant: "destructive",
-      })
-
       return false
     } finally {
       this.syncLock = false
@@ -425,6 +492,19 @@ export class OfflineService {
 
   // Obtener y cachear datos de Supabase
   private async fetchAndCacheData() {
+    if (this.state.connectionStatus !== "connected" || !this.supabase) {
+      console.log("No hay conexión a Supabase, usando datos en caché")
+
+      // Si no hay datos en caché, usar datos de ejemplo
+      if (Object.keys(this.state.data).length === 0) {
+        this.state.data = { ...EXAMPLE_DATA }
+        this.saveStateToStorage()
+        this.notifyListeners()
+      }
+
+      return
+    }
+
     try {
       // Obtener expedientes (limitado a 100 para evitar problemas de rendimiento)
       const { data: expedientes, error: expedientesError } = await this.supabase
@@ -528,7 +608,15 @@ export class OfflineService {
       this.notifyListeners()
     } catch (error) {
       console.error("Error al obtener datos de Supabase:", error)
-      throw error
+
+      // Si hay un error, asegurarse de que haya datos de ejemplo disponibles
+      if (Object.keys(this.state.data).length === 0) {
+        this.state.data = { ...EXAMPLE_DATA }
+        this.saveStateToStorage()
+        this.notifyListeners()
+      }
+
+      this.updateConnectionStatus("error", error instanceof Error ? error.message : "Error desconocido")
     }
   }
 
@@ -550,12 +638,17 @@ export class OfflineService {
     this.saveStateToStorage()
     this.notifyListeners()
 
+    // Si está online y conectado a Supabase, intentar sincronizar inmediatamente
+    if (this.isConnected()) {
+      this.syncPendingOperations()
+    }
+
     return id
   }
 
   // Sincronizar operaciones pendientes
   private async syncPendingOperations(): Promise<void> {
-    if (this.state.forcedOfflineMode || !this.state.isOnline || this.state.pendingOperations.length === 0) {
+    if (!this.isConnected() || this.state.pendingOperations.length === 0 || !this.supabase) {
       return
     }
 
@@ -608,6 +701,9 @@ export class OfflineService {
           this.updateOperationStatus(operation.id, "error", error.message || "Error desconocido", retryCount)
         } else {
           this.updateOperationStatus(operation.id, "pending", error.message || "Error desconocido", retryCount)
+
+          // Esperar antes de reintentar la siguiente operación
+          await delay(this.retryDelay * retryCount)
         }
       }
     }
@@ -672,49 +768,56 @@ export class OfflineService {
     type: PendingOperation["type"],
     data: any,
   ): Promise<{ success: boolean; data?: T; error?: string; offlineId?: string }> {
-    // Si estamos en modo offline forzado o sin conexión, siempre guardar localmente
-    if (this.state.forcedOfflineMode || !this.state.isOnline) {
+    // Si está online y conectado a Supabase, intentar realizar la operación directamente
+    if (this.isConnected() && this.supabase) {
+      try {
+        let result
+        switch (type) {
+          case "insert":
+            result = await this.supabase.from(table).insert(data).select().single()
+            break
+          case "update":
+            result = await this.supabase.from(table).update(data).eq("id", data.id).select().single()
+            break
+          case "delete":
+            result = await this.supabase.from(table).delete().eq("id", data.id)
+            break
+        }
+
+        if (result.error) {
+          throw result.error
+        }
+
+        // Actualizar caché local
+        await this.fetchAndCacheData()
+
+        return { success: true, data: result.data }
+      } catch (error: any) {
+        console.error(`Error al realizar operación ${type} en ${table}:`, error)
+
+        // Si falla, agregar a operaciones pendientes
+        const offlineId = this.addPendingOperation({ table, type, data })
+
+        // Actualizar caché local manualmente para reflejar el cambio
+        this.updateLocalCache(table, type, data)
+
+        return {
+          success: true, // Consideramos éxito porque se guardó localmente
+          error: error.message || "Error al realizar la operación",
+          offlineId,
+        }
+      }
+    } else {
+      // Si está offline o no conectado a Supabase, agregar a operaciones pendientes
       const offlineId = this.addPendingOperation({ table, type, data })
+
+      // Actualizar caché local manualmente para reflejar el cambio
       this.updateLocalCache(table, type, data)
 
       return {
         success: true,
         offlineId,
         data: type === "delete" ? undefined : data,
-      }
-    }
-
-    // Si estamos online y no en modo forzado, intentar realizar la operación directamente
-    try {
-      let result
-      switch (type) {
-        case "insert":
-          result = await this.supabase.from(table).insert(data).select().single()
-          break
-        case "update":
-          result = await this.supabase.from(table).update(data).eq("id", data.id).select().single()
-          break
-        case "delete":
-          result = await this.supabase.from(table).delete().eq("id", data.id)
-          break
-      }
-
-      if (result.error) {
-        throw result.error
-      }
-
-      return { success: true, data: result.data }
-    } catch (error: any) {
-      console.error(`Error al realizar operación ${type} en ${table}:`, error)
-
-      // Si falla, agregar a operaciones pendientes
-      const offlineId = this.addPendingOperation({ table, type, data })
-      this.updateLocalCache(table, type, data)
-
-      return {
-        success: true, // Consideramos éxito porque se guardó localmente
-        error: error.message || "Error al realizar la operación",
-        offlineId,
       }
     }
   }
@@ -757,17 +860,45 @@ export class OfflineService {
     this.cacheData(cacheKey, currentData)
   }
 
-  // Reintentar operaciones con error
-  public async retryFailedOperations(): Promise<boolean> {
-    if (this.state.forcedOfflineMode) {
+  // Forzar sincronización manual
+  public async forceSyncData(): Promise<boolean> {
+    toast({
+      title: "Sincronizando datos",
+      description: "Intentando sincronizar datos con el servidor...",
+    })
+
+    // Verificar conexión a Supabase primero
+    const connected = await this.checkConnection()
+
+    if (!connected) {
       toast({
-        title: "Operación no disponible",
-        description: "No se pueden reintentar operaciones en modo offline forzado.",
+        title: "Error de sincronización",
+        description: "No se pudo conectar con la base de datos. Trabajando en modo offline.",
         variant: "destructive",
       })
       return false
     }
 
+    const result = await this.syncData()
+
+    if (result) {
+      toast({
+        title: "Sincronización completada",
+        description: "Los datos se han sincronizado correctamente.",
+      })
+    } else {
+      toast({
+        title: "Error de sincronización",
+        description: "No se pudieron sincronizar los datos. Verifique su conexión a internet.",
+        variant: "destructive",
+      })
+    }
+
+    return result
+  }
+
+  // Reintentar operaciones con error
+  public async retryFailedOperations(): Promise<boolean> {
     const failedOps = this.state.pendingOperations.filter((op) => op.status === "error")
 
     if (failedOps.length === 0) {
@@ -778,10 +909,13 @@ export class OfflineService {
       return true
     }
 
-    if (!this.state.isOnline) {
+    // Verificar conexión a Supabase primero
+    const connected = await this.checkConnection()
+
+    if (!connected) {
       toast({
-        title: "Sin conexión",
-        description: "No se pueden reintentar operaciones sin conexión a internet.",
+        title: "Error de sincronización",
+        description: "No se pudo conectar con la base de datos. Trabajando en modo offline.",
         variant: "destructive",
       })
       return false
@@ -812,7 +946,7 @@ export class OfflineService {
       ...initialState,
       isOnline: navigator.onLine,
       data: { ...EXAMPLE_DATA }, // Mantener datos de ejemplo
-      forcedOfflineMode: this.state.forcedOfflineMode, // Mantener configuración de modo offline
+      connectionStatus: this.state.connectionStatus,
     }
     this.saveStateToStorage()
     this.notifyListeners()
@@ -821,6 +955,20 @@ export class OfflineService {
       title: "Datos eliminados",
       description: "Se han eliminado todos los datos almacenados localmente.",
     })
+  }
+
+  // Limpiar al destruir
+  public destroy() {
+    window.removeEventListener("online", this.handleOnline)
+    window.removeEventListener("offline", this.handleOffline)
+
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval)
+    }
+
+    if (this.connectionCheckInterval) {
+      clearInterval(this.connectionCheckInterval)
+    }
   }
 }
 

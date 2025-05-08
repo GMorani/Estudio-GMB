@@ -3,7 +3,7 @@
 import { useOfflineService } from "@/lib/offline-service"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Wifi, WifiOff, RefreshCw, Database, AlertTriangle, CheckCircle2, Lock, Unlock } from "lucide-react"
+import { Wifi, WifiOff, RefreshCw, Database, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -16,8 +16,6 @@ import {
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
 import { useState } from "react"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 
 export function SyncStatus() {
   const { state, service } = useOfflineService()
@@ -37,7 +35,7 @@ export function SyncStatus() {
   // Determinar el color del badge
   let badgeVariant: "default" | "secondary" | "destructive" | "outline" = "default"
 
-  if (!state.isOnline || state.forcedOfflineMode) {
+  if (!state.isOnline || state.connectionStatus === "disconnected" || state.connectionStatus === "error") {
     badgeVariant = "destructive"
   } else if (errorCount > 0) {
     badgeVariant = "destructive"
@@ -47,13 +45,17 @@ export function SyncStatus() {
 
   const badgeContent = (
     <Badge variant={badgeVariant} className="cursor-pointer">
-      {state.forcedOfflineMode ? (
-        <>
-          <Lock className="h-3 w-3 mr-1" /> Modo offline forzado
-        </>
-      ) : !state.isOnline ? (
+      {!state.isOnline ? (
         <>
           <WifiOff className="h-3 w-3 mr-1" /> Offline
+        </>
+      ) : state.connectionStatus === "checking" ? (
+        <>
+          <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Verificando...
+        </>
+      ) : state.connectionStatus === "error" ? (
+        <>
+          <AlertCircle className="h-3 w-3 mr-1" /> Error de conexión
         </>
       ) : state.syncInProgress ? (
         <>
@@ -99,21 +101,39 @@ export function SyncStatus() {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {state.forcedOfflineMode ? (
-                <Lock className="h-4 w-4 text-amber-500" />
+              {state.connectionStatus === "connected" ? (
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              ) : state.connectionStatus === "checking" ? (
+                <RefreshCw className="h-4 w-4 text-amber-500 animate-spin" />
+              ) : state.connectionStatus === "error" ? (
+                <AlertCircle className="h-4 w-4 text-red-500" />
               ) : (
-                <Unlock className="h-4 w-4 text-green-500" />
+                <WifiOff className="h-4 w-4 text-red-500" />
               )}
-              <span className="font-medium">Modo offline forzado:</span>
+              <span className="font-medium">Estado de Supabase:</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={state.forcedOfflineMode}
-                onCheckedChange={(checked) => service.setForcedOfflineMode(checked)}
-              />
-              <Label>{state.forcedOfflineMode ? "Activado" : "Desactivado"}</Label>
-            </div>
+            <span>
+              {state.connectionStatus === "connected"
+                ? "Conectado"
+                : state.connectionStatus === "checking"
+                  ? "Verificando..."
+                  : state.connectionStatus === "error"
+                    ? "Error"
+                    : "Desconectado"}
+            </span>
           </div>
+
+          {state.connectionStatus === "error" && state.lastError && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <span className="font-medium">Último error:</span>
+              </div>
+              <span className="text-sm text-red-500 max-w-[200px] truncate" title={state.lastError}>
+                {state.lastError}
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -174,7 +194,7 @@ export function SyncStatus() {
               Limpiar datos
             </Button>
 
-            {errorCount > 0 && !state.forcedOfflineMode && (
+            {errorCount > 0 && (
               <Button
                 type="button"
                 variant="secondary"
@@ -193,8 +213,8 @@ export function SyncStatus() {
             </Button>
             <Button
               type="button"
-              onClick={() => service.syncData()}
-              disabled={!state.isOnline || state.syncInProgress || state.forcedOfflineMode}
+              onClick={() => service.forceSyncData()}
+              disabled={!state.isOnline || state.syncInProgress}
             >
               {state.syncInProgress ? (
                 <>
