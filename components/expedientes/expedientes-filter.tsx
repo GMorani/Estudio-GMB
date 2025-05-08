@@ -2,48 +2,20 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2 } from "lucide-react"
+import { Loader2, WifiOff, RefreshCw } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useOfflineService } from "@/lib/offline-service"
 
-// Función para cargar opciones desde localStorage
-const loadOptionsFromLocalStorage = () => {
-  try {
-    const personasCache = localStorage.getItem("personas_filter_cache")
-    const estadosCache = localStorage.getItem("estados_filter_cache")
-
-    return {
-      personas: personasCache ? JSON.parse(personasCache) : null,
-      estados: estadosCache ? JSON.parse(estadosCache) : null,
-    }
-  } catch (error) {
-    console.error("Error al cargar opciones desde localStorage:", error)
-    return { personas: null, estados: null }
-  }
-}
-
-// Función para guardar opciones en localStorage
-const saveOptionsToLocalStorage = (personas: any[], estados: any[]) => {
-  try {
-    localStorage.setItem("personas_filter_cache", JSON.stringify(personas))
-    localStorage.setItem("estados_filter_cache", JSON.stringify(estados))
-  } catch (error) {
-    console.error("Error al guardar opciones en localStorage:", error)
-  }
-}
-
-export function ExpedientesFilter() {
-  const [personas, setPersonas] = useState<{ id: string; nombre: string }[]>([])
-  const [estados, setEstados] = useState<{ id: string; nombre: string }[]>([])
+export function ExpedientesFilter({ onFilterChange }: { onFilterChange?: (filters: any) => void }) {
+  const { state, service } = useOfflineService()
   const [loadingOptions, setLoadingOptions] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClientComponentClient()
   const { toast } = useToast()
 
   // Obtener parámetros de búsqueda actuales
@@ -59,72 +31,50 @@ export function ExpedientesFilter() {
   const [personaFilter, setPersonaFilter] = useState(persona)
   const [estadoFilter, setEstadoFilter] = useState(estado)
 
+  // Estado para las opciones
+  const [personas, setPersonas] = useState<{ id: string; nombre: string }[]>([])
+  const [estados, setEstados] = useState<{ id: string; nombre: string }[]>([])
+
+  // Cargar opciones desde el servicio offline
   useEffect(() => {
-    async function fetchOptions() {
+    async function loadOptions() {
       setLoadingOptions(true)
-      setError(null)
-
-      // Intentar cargar desde localStorage primero
-      const cachedOptions = loadOptionsFromLocalStorage()
-      if (cachedOptions.personas && cachedOptions.estados) {
-        setPersonas(cachedOptions.personas)
-        setEstados(cachedOptions.estados)
-        setLoadingOptions(false)
-      }
-
       try {
-        // Verificar conexión antes de hacer consultas principales
-        const { data: connectionTest, error: connectionError } = await supabase
-          .from("personas")
-          .select("id", { count: "exact", head: true })
-          .limit(1)
-          .maybeSingle()
-
-        if (connectionError) throw connectionError
-
-        // Obtener personas (clientes)
-        const { data: personasData, error: personasError } = await supabase
-          .from("personas")
-          .select("id, nombre")
-          .eq("tipo_id", 1) // Tipo cliente
-          .order("nombre")
-
-        if (personasError) throw personasError
-
-        // Obtener estados
-        const { data: estadosData, error: estadosError } = await supabase
-          .from("estados_expediente")
-          .select("id, nombre")
-          .order("nombre")
-
-        if (estadosError) throw estadosError
-
-        setPersonas(personasData || [])
-        setEstados(estadosData || [])
-
-        // Guardar en localStorage para uso futuro
-        if (personasData && estadosData) {
-          saveOptionsToLocalStorage(personasData, estadosData)
+        // Obtener clientes del servicio offline
+        const clientes = service.getCachedData<any>("clientes")
+        if (clientes.length > 0) {
+          setPersonas(
+            clientes.map((cliente: any) => ({
+              id: cliente.id,
+              nombre: cliente.nombre,
+            })),
+          )
         }
-      } catch (err: any) {
-        console.error("Error al cargar opciones de filtro:", err)
-        setError(err.message || "Error al cargar opciones")
 
-        // Si no tenemos datos en caché y hay un error, mostrar mensaje
-        if (!cachedOptions.personas || !cachedOptions.estados) {
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar las opciones de filtro.",
-            variant: "destructive",
-          })
+        // Obtener estados del servicio offline
+        const estados = service.getCachedData<any>("estados")
+        if (estados.length > 0) {
+          setEstados(
+            estados.map((estado: any) => ({
+              id: estado.id,
+              nombre: estado.nombre,
+            })),
+          )
         }
+
+        // Si no hay datos y estamos online, intentar sincronizar
+        if ((clientes.length === 0 || estados.length === 0) && state?.isOnline) {
+          await service.syncData()
+        }
+      } catch (err) {
+        console.error("Error al cargar opciones:", err)
       } finally {
         setLoadingOptions(false)
       }
     }
 
-    fetchOptions()
-  }, [supabase, toast])
+    loadOptions()
+  }, [service, state?.isOnline, state?.lastSyncTime])
 
   // Actualizar la URL con los parámetros de búsqueda
   const applyFilters = () => {
@@ -139,11 +89,51 @@ export function ExpedientesFilter() {
     params.set("ordenarPor", ordenarPor)
     params.set("ordenAscendente", String(ordenAscendente))
 
+    // Si hay una función de callback para cambios de filtro, llamarla
+    if (onFilterChange) {
+      onFilterChange({
+        numero: numeroFilter,
+        persona: personaFilter,
+        estado: estadoFilter,
+        tipo,
+        ordenarPor,
+        ordenAscendente,
+      })
+    }
+
     router.push(`/expedientes?${params.toString()}`)
+  }
+
+  // Forzar sincronización
+  const handleSync = async () => {
+    if (!state?.isOnline) {
+      toast({
+        title: "Sin conexión",
+        description: "No es posible sincronizar en modo offline.",
+        variant: "warning",
+      })
+      return
+    }
+
+    setLoadingOptions(true)
+    try {
+      await service.forceSyncData()
+    } finally {
+      setLoadingOptions(false)
+    }
   }
 
   return (
     <div className="space-y-4">
+      {!state?.isOnline && (
+        <Alert variant="warning" className="bg-amber-50 border-amber-200 text-amber-800">
+          <WifiOff className="h-4 w-4 mr-2" />
+          <AlertDescription>
+            Estás en modo offline. Los filtros funcionarán con datos almacenados localmente.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <Label htmlFor="numero">Número</Label>
@@ -191,7 +181,25 @@ export function ExpedientesFilter() {
         </div>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-between">
+        <Button
+          variant="outline"
+          onClick={handleSync}
+          disabled={loadingOptions || !state?.isOnline || state?.syncInProgress}
+        >
+          {state?.syncInProgress ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Sincronizando...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Sincronizar
+            </>
+          )}
+        </Button>
+
         <Button onClick={applyFilters} disabled={loadingOptions}>
           {loadingOptions && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Aplicar Filtros
