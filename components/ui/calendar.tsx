@@ -8,8 +8,8 @@ import { format } from "date-fns"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
   onManualDateChange?: (date: Date) => void
@@ -17,60 +17,124 @@ export type CalendarProps = React.ComponentProps<typeof DayPicker> & {
 
 function CustomCaption(props: CaptionProps) {
   const { displayMonth, onMonthChange } = props
+  const [view, setView] = React.useState<"calendar" | "month" | "year">("calendar")
+
+  // Generate months
   const months = React.useMemo(
     () => Array.from({ length: 12 }, (_, i) => new Date(displayMonth.getFullYear(), i, 1)),
     [displayMonth],
   )
 
-  // Generate a range of years (current year ± 10 years)
+  // Generate years (current year ± 10 years)
   const currentYear = displayMonth.getFullYear()
   const years = React.useMemo(() => Array.from({ length: 21 }, (_, i) => currentYear - 10 + i), [currentYear])
 
-  const handleMonthChange = React.useCallback(
-    (value: string) => {
-      const newDate = new Date(displayMonth)
-      newDate.setMonth(Number.parseInt(value))
-      onMonthChange(newDate)
-    },
-    [displayMonth, onMonthChange],
-  )
+  // Handle month selection
+  const handleMonthSelect = (monthIndex: number) => {
+    const newDate = new Date(displayMonth)
+    newDate.setMonth(monthIndex)
+    onMonthChange(newDate)
+    setView("calendar")
+  }
 
-  const handleYearChange = React.useCallback(
-    (value: string) => {
-      const newDate = new Date(displayMonth)
-      newDate.setFullYear(Number.parseInt(value))
-      onMonthChange(newDate)
-    },
-    [displayMonth, onMonthChange],
-  )
+  // Handle year selection
+  const handleYearSelect = (year: number) => {
+    const newDate = new Date(displayMonth)
+    newDate.setFullYear(year)
+    onMonthChange(newDate)
+    setView("month")
+  }
 
+  // Render year selection view
+  if (view === "year") {
+    return (
+      <div className="p-2">
+        <div className="flex justify-between items-center mb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const newDate = new Date(displayMonth)
+              newDate.setFullYear(newDate.getFullYear() - 10)
+              onMonthChange(newDate)
+            }}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Años anteriores</span>
+          </Button>
+          <h2 className="text-sm font-medium">
+            {years[0]} - {years[years.length - 1]}
+          </h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const newDate = new Date(displayMonth)
+              newDate.setFullYear(newDate.getFullYear() + 10)
+              onMonthChange(newDate)
+            }}
+          >
+            <ChevronRight className="h-4 w-4" />
+            <span className="sr-only">Años siguientes</span>
+          </Button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {years.map((year) => (
+            <Button
+              key={year}
+              variant={year === displayMonth.getFullYear() ? "default" : "outline"}
+              className="h-9"
+              onClick={() => handleYearSelect(year)}
+            >
+              {year}
+            </Button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Render month selection view
+  if (view === "month") {
+    return (
+      <div className="p-2">
+        <div className="flex justify-between items-center mb-4">
+          <Button variant="outline" size="sm" onClick={() => setView("year")}>
+            <ChevronLeft className="h-4 w-4" />
+            <span className="sr-only">Volver a años</span>
+          </Button>
+          <h2 className="text-sm font-medium cursor-pointer hover:underline" onClick={() => setView("year")}>
+            {displayMonth.getFullYear()}
+          </h2>
+          <Button variant="ghost" size="sm" className="opacity-0" disabled>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {months.map((month, index) => (
+            <Button
+              key={index}
+              variant={index === displayMonth.getMonth() ? "default" : "outline"}
+              className="h-9"
+              onClick={() => handleMonthSelect(index)}
+            >
+              {format(month, "MMM", { locale: es })}
+            </Button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Default calendar view caption
   return (
     <div className="flex justify-center items-center gap-1">
-      <Select value={displayMonth.getMonth().toString()} onValueChange={handleMonthChange}>
-        <SelectTrigger className="h-8 w-[110px]">
-          <SelectValue>{format(displayMonth, "MMMM", { locale: es })}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {months.map((month, index) => (
-            <SelectItem key={index} value={index.toString()}>
-              {format(month, "MMMM", { locale: es })}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={displayMonth.getFullYear().toString()} onValueChange={handleYearChange}>
-        <SelectTrigger className="h-8 w-[90px]">
-          <SelectValue>{displayMonth.getFullYear()}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {years.map((year) => (
-            <SelectItem key={year} value={year.toString()}>
-              {year}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <Button variant="ghost" size="sm" className="text-sm font-medium" onClick={() => setView("month")}>
+        {format(displayMonth, "MMMM", { locale: es })}
+      </Button>
+      <Button variant="ghost" size="sm" className="text-sm font-medium" onClick={() => setView("year")}>
+        {displayMonth.getFullYear()}
+      </Button>
     </div>
   )
 }
