@@ -10,10 +10,37 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import { Loader2 } from "lucide-react"
 
+// Función para cargar opciones desde localStorage
+const loadOptionsFromLocalStorage = () => {
+  try {
+    const personasCache = localStorage.getItem("personas_filter_cache")
+    const estadosCache = localStorage.getItem("estados_filter_cache")
+
+    return {
+      personas: personasCache ? JSON.parse(personasCache) : null,
+      estados: estadosCache ? JSON.parse(estadosCache) : null,
+    }
+  } catch (error) {
+    console.error("Error al cargar opciones desde localStorage:", error)
+    return { personas: null, estados: null }
+  }
+}
+
+// Función para guardar opciones en localStorage
+const saveOptionsToLocalStorage = (personas: any[], estados: any[]) => {
+  try {
+    localStorage.setItem("personas_filter_cache", JSON.stringify(personas))
+    localStorage.setItem("estados_filter_cache", JSON.stringify(estados))
+  } catch (error) {
+    console.error("Error al guardar opciones en localStorage:", error)
+  }
+}
+
 export function ExpedientesFilter() {
   const [personas, setPersonas] = useState<{ id: string; nombre: string }[]>([])
   const [estados, setEstados] = useState<{ id: string; nombre: string }[]>([])
   const [loadingOptions, setLoadingOptions] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
@@ -35,7 +62,26 @@ export function ExpedientesFilter() {
   useEffect(() => {
     async function fetchOptions() {
       setLoadingOptions(true)
+      setError(null)
+
+      // Intentar cargar desde localStorage primero
+      const cachedOptions = loadOptionsFromLocalStorage()
+      if (cachedOptions.personas && cachedOptions.estados) {
+        setPersonas(cachedOptions.personas)
+        setEstados(cachedOptions.estados)
+        setLoadingOptions(false)
+      }
+
       try {
+        // Verificar conexión antes de hacer consultas principales
+        const { data: connectionTest, error: connectionError } = await supabase
+          .from("personas")
+          .select("id", { count: "exact", head: true })
+          .limit(1)
+          .maybeSingle()
+
+        if (connectionError) throw connectionError
+
         // Obtener personas (clientes)
         const { data: personasData, error: personasError } = await supabase
           .from("personas")
@@ -55,13 +101,23 @@ export function ExpedientesFilter() {
 
         setPersonas(personasData || [])
         setEstados(estadosData || [])
-      } catch (error) {
-        console.error("Error al cargar opciones de filtro:", error)
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar las opciones de filtro.",
-          variant: "destructive",
-        })
+
+        // Guardar en localStorage para uso futuro
+        if (personasData && estadosData) {
+          saveOptionsToLocalStorage(personasData, estadosData)
+        }
+      } catch (err: any) {
+        console.error("Error al cargar opciones de filtro:", err)
+        setError(err.message || "Error al cargar opciones")
+
+        // Si no tenemos datos en caché y hay un error, mostrar mensaje
+        if (!cachedOptions.personas || !cachedOptions.estados) {
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar las opciones de filtro.",
+            variant: "destructive",
+          })
+        }
       } finally {
         setLoadingOptions(false)
       }
