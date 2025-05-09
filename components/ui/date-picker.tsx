@@ -14,9 +14,10 @@ export interface DatePickerProps {
   setDate: (date: Date | undefined) => void
   className?: string
   disabled?: boolean
+  placeholder?: string
 }
 
-export function DatePicker({ date, setDate, className, disabled }: DatePickerProps) {
+export function DatePicker({ date, setDate, className, disabled, placeholder = "Seleccionar fecha" }: DatePickerProps) {
   const [open, setOpen] = useState(false)
 
   const handleSelect = (selectedDate: Date | undefined) => {
@@ -38,10 +39,10 @@ export function DatePicker({ date, setDate, className, disabled }: DatePickerPro
           disabled={disabled}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, "dd/MM/yyyy", { locale: es }) : <span>Seleccionar fecha</span>}
+          {date ? format(date, "dd/MM/yyyy", { locale: es }) : <span>{placeholder}</span>}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent className="w-auto p-0 min-w-[320px]" align="start">
         <Calendar
           mode="single"
           selected={date}
@@ -49,6 +50,11 @@ export function DatePicker({ date, setDate, className, disabled }: DatePickerPro
           onManualDateChange={handleManualDateChange}
           initialFocus
           locale={es}
+          showOutsideDays={true}
+          className="border-none shadow-none p-1"
+          captionLayout="dropdown-buttons"
+          fromYear={1990}
+          toYear={2050}
         />
       </PopoverContent>
     </Popover>
