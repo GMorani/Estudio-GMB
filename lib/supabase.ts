@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { cookies } from "next/headers"
 
 // Crear un cliente de Supabase para el lado del cliente
 export const createClientSupabase = () => {
@@ -14,4 +16,8 @@ export const createServerSupabase = () => {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string
 
   return createClient(supabaseUrl, supabaseServiceKey)
+}
+
+export const createServerSupabaseClient = () => {
+  return createServerComponentClient({ cookies })
 }
