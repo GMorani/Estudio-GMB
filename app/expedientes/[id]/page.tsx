@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,7 +12,23 @@ import { Badge } from "@/components/ui/badge"
 import { ExpedienteTareas } from "@/components/expedientes/expediente-tareas"
 import { ExpedienteActividades } from "@/components/expedientes/expediente-actividades"
 
+// Función para verificar si un ID es un UUID válido
+function isValidUUID(id: string) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return uuidRegex.test(id)
+}
+
 export default function ExpedienteDetalle({ params }: { params: { id: string } }) {
+  // Redirección inmediata si el ID es "nuevo"
+  if (params.id === "nuevo") {
+    redirect("/expedientes/nuevo")
+  }
+
+  // Validación de UUID
+  if (!isValidUUID(params.id)) {
+    notFound()
+  }
+
   const [expediente, setExpediente] = useState(null)
   const [tareas, setTareas] = useState([])
   const [actividades, setActividades] = useState([])
@@ -50,6 +66,7 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
         if (expedienteError || !expedienteData) {
           console.error("Expediente no encontrado:", expedienteError?.message || "No existe")
           notFound()
+          return
         }
 
         // Obtener datos del juzgado si existe
@@ -129,15 +146,24 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
   useEffect(() => {
     if (typeof window !== "undefined" && params.id) {
       try {
-        const storedData = localStorage.getItem(`expediente_${params.id}_datos_adicionales`)
+        // Intentar cargar datos adicionales usando el ID del expediente
+        const storedData = localStorage.getItem(`expediente_adicional_${params.id}`)
         if (storedData) {
           setDatosAdicionales(JSON.parse(storedData))
+        } else {
+          // Si no se encuentran datos con el ID, intentar buscar por número de expediente
+          if (expediente?.numero) {
+            const storedDataByNumero = localStorage.getItem(`expediente_adicional_${expediente.numero}`)
+            if (storedDataByNumero) {
+              setDatosAdicionales(JSON.parse(storedDataByNumero))
+            }
+          }
         }
       } catch (error) {
         console.error("Error al cargar datos adicionales:", error)
       }
     }
-  }, [params.id])
+  }, [params.id, expediente])
 
   // Función para manejar cuando se completa una tarea
   const handleTareaCompletada = (actividad) => {
