@@ -21,6 +21,7 @@ const aseguradoraSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio"),
   dni_cuit: z.string().min(1, "El CUIT es obligatorio"),
   domicilio: z.string().min(1, "El domicilio es obligatorio"),
+  codigo_postal: z.string().optional(),
   telefono: z.string().min(1, "El teléfono es obligatorio"),
   email: z.string().email("Email inválido").min(1, "El email es obligatorio"),
 })
@@ -45,6 +46,7 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
         nombre: aseguradora.nombre,
         dni_cuit: aseguradora.dni_cuit,
         domicilio: aseguradora.domicilio,
+        codigo_postal: aseguradora.codigo_postal || "",
         telefono: aseguradora.telefono,
         email: aseguradora.email,
       }
@@ -52,6 +54,7 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
         nombre: "",
         dni_cuit: "",
         domicilio: "",
+        codigo_postal: "",
         telefono: "",
         email: "",
       }
@@ -101,6 +104,7 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
         nombre: data.nombre,
         dni_cuit: data.dni_cuit.replace(/\./g, ""), // Eliminar puntos
         domicilio: data.domicilio,
+        codigo_postal: data.codigo_postal, // Añadir código postal
         telefono: data.telefono.replace(/-/g, ""), // Eliminar guiones
         email: data.email,
         tipo_id: 3, // Tipo aseguradora
@@ -235,6 +239,22 @@ export function AseguradoraForm({ aseguradora }: AseguradoraFormProps) {
                     <FormControl>
                       <Textarea {...field} rows={2} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Código Postal */}
+              <FormField
+                control={form.control}
+                name="codigo_postal"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Código Postal</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Ej: C1425DQF" />
+                    </FormControl>
+                    <FormDescription>Ingrese el código postal alfanumérico</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
