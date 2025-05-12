@@ -34,12 +34,6 @@ export function Sidebar({ className }: { className?: string }) {
       color: "text-violet-500",
     },
     {
-      label: "Documentos",
-      icon: FileText,
-      href: "/documentos",
-      color: "text-blue-500",
-    },
-    {
       label: "Tareas",
       icon: CheckSquare,
       href: "/tareas",

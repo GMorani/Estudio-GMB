@@ -1,29 +1,21 @@
-import { Suspense } from "react"
-import GoogleDriveConfig from "@/components/configuracion/google-drive-config"
-
-function ConfiguracionSkeleton() {
-  return (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-      <div className="h-64 bg-gray-200 rounded"></div>
-    </div>
-  )
-}
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function ConfiguracionPage() {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Configuración</h1>
-        <p className="text-muted-foreground">Gestiona la configuración de tu cuenta y conexiones</p>
+        <p className="text-muted-foreground">Administra la configuración de tu sistema</p>
       </div>
 
-      <Suspense fallback={<ConfiguracionSkeleton />}>
-        <div className="grid gap-6">
-          <GoogleDriveConfig />
-          {/* Aquí puedes añadir más componentes de configuración */}
-        </div>
-      </Suspense>
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuración General</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">No hay configuraciones disponibles actualmente.</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }
