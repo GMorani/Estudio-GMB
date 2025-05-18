@@ -1,6 +1,6 @@
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,15 +12,28 @@ import { ArrowLeft, Pencil } from "lucide-react"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
+// Función para validar UUID
+function isValidUUID(uuid: string) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  return uuidRegex.test(uuid)
+}
+
 export default async function ClienteDetallePage({
   params,
 }: {
   params: { id: string }
 }) {
-  // Verificar que el ID sea válido
-  if (!params.id || typeof params.id !== "string") {
-    console.error("ID de cliente inválido:", params.id)
+  // Verificar si el ID es "nuevo" y redirigir
+  if (params.id === "nuevo") {
+    redirect("/clientes/nuevo")
+    return null // Este return nunca se ejecutará debido a la redirección, pero ayuda a TypeScript
+  }
+
+  // Verificar que el ID sea un UUID válido
+  if (!params.id || !isValidUUID(params.id)) {
+    console.error("ID de cliente inválido o no es un UUID:", params.id)
     notFound()
+    return null // Este return nunca se ejecutará debido a notFound(), pero ayuda a TypeScript
   }
 
   const supabase = createServerComponentClient({ cookies })
@@ -38,6 +51,7 @@ export default async function ClienteDetallePage({
     if (errorExiste || !clienteExiste) {
       console.error("Cliente no encontrado:", errorExiste)
       notFound()
+      return null // Este return nunca se ejecutará debido a notFound(), pero ayuda a TypeScript
     }
 
     // Si llegamos aquí, el cliente existe, ahora obtenemos todos sus datos

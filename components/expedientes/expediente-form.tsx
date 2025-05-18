@@ -18,6 +18,7 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { useToast } from "@/components/ui/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PlusCircle, Trash2 } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 
 // Esquema de validación
 const expedienteSchema = z.object({
@@ -543,22 +544,9 @@ export function ExpedienteForm({
         juzgado_id: data.juzgado_id === "none" ? null : data.juzgado_id || null,
         objeto: data.objeto,
         autos: data.autos,
-      }
-
-      // Almacenar los datos adicionales en localStorage para referencia futura
-      // Esto es opcional y se puede eliminar si no se necesita
-      if (data.fecha_hecho || data.mecanica_hecho) {
-        try {
-          const datosAdicionales = {
-            fecha_hecho: data.fecha_hecho?.toISOString() || null,
-            mecanica_hecho: data.mecanica_hecho || null,
-          }
-
-          // Guardar en localStorage usando el número de expediente como clave
-          localStorage.setItem(`expediente_adicional_${data.numero}`, JSON.stringify(datosAdicionales))
-        } catch (error) {
-          console.log("No se pudieron guardar los datos adicionales en localStorage", error)
-        }
+        // Añadir directamente los campos adicionales
+        fecha_hecho: data.fecha_hecho?.toISOString() || null,
+        mecanica_hecho: data.mecanica_hecho || null,
       }
 
       let expedienteId
@@ -673,39 +661,6 @@ export function ExpedienteForm({
     }
   }
 
-  // Modificar el renderizado del campo objeto para asegurar que muestre el valor correcto
-  // Cargar datos adicionales desde localStorage
-  useEffect(() => {
-    if (expediente && expediente.numero) {
-      try {
-        const key = `expediente_adicional_${expediente.numero}`
-        const storedData = localStorage.getItem(key)
-
-        if (storedData) {
-          const parsedData = JSON.parse(storedData)
-
-          // Establecer fecha del hecho si existe
-          if (parsedData.fecha_hecho) {
-            form.setValue("fecha_hecho", new Date(parsedData.fecha_hecho), {
-              shouldValidate: false,
-              shouldDirty: true,
-            })
-          }
-
-          // Establecer mecánica del hecho si existe
-          if (parsedData.mecanica_hecho) {
-            form.setValue("mecanica_hecho", parsedData.mecanica_hecho, {
-              shouldValidate: false,
-              shouldDirty: true,
-            })
-          }
-        }
-      } catch (error) {
-        console.error("Error al cargar datos adicionales:", error)
-      }
-    }
-  }, [expediente, form])
-
   return (
     <Card>
       <CardContent className="pt-6">
@@ -794,31 +749,8 @@ export function ExpedienteForm({
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Fecha del Hecho</FormLabel>
-                        <DatePicker
-                          date={field.value}
-                          setDate={(date) => {
-                            field.onChange(date)
-                            // Guardar inmediatamente en localStorage
-                            try {
-                              const expedienteNum = form.getValues("numero")
-                              if (expedienteNum) {
-                                const key = `expediente_adicional_${expedienteNum}`
-                                const existingData = localStorage.getItem(key)
-                                const parsedData = existingData ? JSON.parse(existingData) : {}
-                                localStorage.setItem(
-                                  key,
-                                  JSON.stringify({
-                                    ...parsedData,
-                                    fecha_hecho: date ? date.toISOString() : null,
-                                  }),
-                                )
-                              }
-                            } catch (error) {
-                              console.error("Error al guardar fecha del hecho:", error)
-                            }
-                          }}
-                        />
-                        <FormDescription>Este campo se guarda localmente y estará disponible al editar</FormDescription>
+                        <DatePicker date={field.value} setDate={field.onChange} />
+                        <FormDescription>Fecha en que ocurrió el hecho</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -832,32 +764,9 @@ export function ExpedienteForm({
                       <FormItem className="md:col-span-2">
                         <FormLabel>Mecánica del Hecho</FormLabel>
                         <FormControl>
-                          <Input
-                            {...field}
-                            onChange={(e) => {
-                              field.onChange(e)
-                              // Guardar inmediatamente en localStorage
-                              try {
-                                const expedienteNum = form.getValues("numero")
-                                if (expedienteNum) {
-                                  const key = `expediente_adicional_${expedienteNum}`
-                                  const existingData = localStorage.getItem(key)
-                                  const parsedData = existingData ? JSON.parse(existingData) : {}
-                                  localStorage.setItem(
-                                    key,
-                                    JSON.stringify({
-                                      ...parsedData,
-                                      mecanica_hecho: e.target.value,
-                                    }),
-                                  )
-                                }
-                              } catch (error) {
-                                console.error("Error al guardar mecánica del hecho:", error)
-                              }
-                            }}
-                          />
+                          <Textarea {...field} rows={3} />
                         </FormControl>
-                        <FormDescription>Describa cómo ocurrió el hecho (se guarda localmente)</FormDescription>
+                        <FormDescription>Describa cómo ocurrió el hecho</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
