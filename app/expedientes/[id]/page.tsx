@@ -7,7 +7,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatDate, formatCurrency } from "@/lib/utils"
-import { ArrowLeft, Pencil } from "lucide-react"
+import { ArrowLeft, Pencil, FileText, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ExpedienteTareas } from "@/components/expedientes/expediente-tareas"
 import { ExpedienteActividades } from "@/components/expedientes/expediente-actividades"
@@ -29,15 +29,11 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
     notFound()
   }
 
-  const [expediente, setExpediente] = useState(null)
+  const [expediente, setExpediente] = useState<any>(null)
   const [tareas, setTareas] = useState([])
   const [actividades, setActividades] = useState([])
   const [loading, setLoading] = useState(true)
   const [nuevaActividad, setNuevaActividad] = useState(null)
-  const [datosAdicionales, setDatosAdicionales] = useState<{
-    fechaHecho?: string | null
-    mecanicaHecho?: string | null
-  }>({})
   const supabase = createClientComponentClient()
 
   // Función para cargar los datos del expediente
@@ -46,7 +42,7 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
       try {
         setLoading(true)
 
-        // Cargar expediente
+        // Cargar expediente con todos los campos, incluyendo fecha_hecho y mecanica_hecho
         const { data: expedienteData, error: expedienteError } = await supabase
           .from("expedientes")
           .select(`
@@ -58,7 +54,9 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
             monto_total,
             juzgado_id,
             objeto,
-            autos
+            autos,
+            fecha_hecho,
+            mecanica_hecho
           `)
           .eq("id", params.id)
           .single()
@@ -142,29 +140,6 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
     cargarDatos()
   }, [params.id, supabase])
 
-  // Cargar datos adicionales desde localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined" && params.id) {
-      try {
-        // Intentar cargar datos adicionales usando el ID del expediente
-        const storedData = localStorage.getItem(`expediente_adicional_${params.id}`)
-        if (storedData) {
-          setDatosAdicionales(JSON.parse(storedData))
-        } else {
-          // Si no se encuentran datos con el ID, intentar buscar por número de expediente
-          if (expediente?.numero) {
-            const storedDataByNumero = localStorage.getItem(`expediente_adicional_${expediente.numero}`)
-            if (storedDataByNumero) {
-              setDatosAdicionales(JSON.parse(storedDataByNumero))
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error al cargar datos adicionales:", error)
-      }
-    }
-  }, [params.id, expediente])
-
   // Función para manejar cuando se completa una tarea
   const handleTareaCompletada = (actividad) => {
     setNuevaActividad(actividad)
@@ -201,12 +176,21 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
             {expediente.autos && <p className="text-muted-foreground">{expediente.autos}</p>}
           </div>
         </div>
-        <Button asChild>
-          <Link href={`/expedientes/${params.id}/editar`}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Editar
+        <div className="flex gap-2">
+          <Link href={`/documentos/nuevo?expediente_id=${params.id}`}>
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <Plus className="h-3 w-3" />
+              Nuevo Documento
+            </Button>
           </Link>
-        </Button>
+          <Button asChild>
+            <Link href={`/expedientes/${params.id}/editar`}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Editar
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
@@ -237,10 +221,10 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
                     <p>{formatDate(expediente.fecha_inicio_judicial)}</p>
                   </div>
                 )}
-                {datosAdicionales.fechaHecho && (
+                {expediente.fecha_hecho && (
                   <div>
                     <p className="text-sm text-muted-foreground">Fecha del Hecho</p>
-                    <p>{formatDate(new Date(datosAdicionales.fechaHecho))}</p>
+                    <p>{formatDate(expediente.fecha_hecho)}</p>
                   </div>
                 )}
                 {expediente.monto_total && (
@@ -263,10 +247,10 @@ export default function ExpedienteDetalle({ params }: { params: { id: string } }
                 )}
               </div>
 
-              {datosAdicionales.mecanicaHecho && (
+              {expediente.mecanica_hecho && (
                 <div className="mt-4">
                   <p className="text-sm text-muted-foreground">Mecánica del Hecho</p>
-                  <p className="whitespace-pre-wrap">{datosAdicionales.mecanicaHecho}</p>
+                  <p className="whitespace-pre-wrap">{expediente.mecanica_hecho}</p>
                 </div>
               )}
             </CardContent>
